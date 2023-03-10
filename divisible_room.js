@@ -58,6 +58,9 @@ const JOIN_SPLIT_CONFIG = {
 // into the the Secondary codec (if configuring Primary) or Primary codec (if configuring Secondary)
 // they will be used to establish an HTTP connection with that other codec, but these credentials will be
 // stored clear text in the macro. 
+// If you wish to slightly obfuscate the credentials, use a Base64 encoded string for OTHER_CODEC_USERNAME and
+// leave OTHER_CODEC_PASSWORD blank. If you do that, you would need to combine the username and password in one string
+// separated by a colon (i.e. "username:password") before Base64 encoding with a tool such as https://www.base64encode.org/
 // Instructions for creating these admin accounts are in the "Installation Instructions" document.
 const OTHER_CODEC_USERNAME='';
 const OTHER_CODEC_PASSWORD='';
@@ -188,7 +191,7 @@ async function validate_config()
 {
   let hasOverview=true;
 
-  if (OTHER_CODEC_USERNAME==''|| OTHER_CODEC_PASSWORD=='') 
+  if (OTHER_CODEC_USERNAME=='') 
       await disableMacro(`config validation fail: OTHER_CODEC credentials must be set.  Current values: OTHER_CODEC_USERNAME: ${OTHER_CODEC_USERNAME} OTHER_CODEC_PASSWORD= ${OTHER_CODEC_PASSWORD}`); 
  
   let allowedMics=[1,2,3,4,5,6,7,8];
@@ -400,7 +403,7 @@ var otherCodec={};
 
 //Run your init script asynchronously 
 async function init_intercodec() {
-if (OTHER_CODEC_USERNAME!='' && OTHER_CODEC_PASSWORD!='') 
+if (OTHER_CODEC_USERNAME!='') 
  if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
   config.compositions.forEach(compose =>{
     if(compose.codecIP!='' && compose.codecIP!=JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP){
