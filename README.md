@@ -9,7 +9,7 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
   show the right image since the code just completey zooms out QuadCam on connector 1 to save the preset.
 - Confirmation messages that secondary codecs are online or in calls now kept separate for each one to prevent
   race conditions.
-- Added the divisble_room_ECS sample macro to easily add xAPI commands to drive an External Controller based on the
+- Added the divisible_room_ECS sample macro to easily add xAPI commands to drive an External Controller based on the
   divisible macro events that are triggered so that code does not have to be embedded in the macro itself in multiple places.
 
 ## Contacts
