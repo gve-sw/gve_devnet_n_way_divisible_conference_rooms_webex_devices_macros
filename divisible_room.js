@@ -148,7 +148,7 @@ const config = {
   monitorMics: [1, 2, 3, 4, 5, 6, 7, 8], // input connectors associated to the microphones being used in the primary or secondary room
   compositions: [     // Create your array of compositions, NOT NEEDED IF YOU ARE CONFIGURING A SECONDARY CODEC 
     {
-      name: 'RoomMain',     // Name for your composition
+      name: 'RoomMain',     // Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
       codecIP: JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP,
       mics: [1, 2, 3],             // Mics you want to associate with this composition
       connectors: [1],    // Video input connector Ids to use
@@ -157,7 +157,7 @@ const config = {
       preset: 0 // use a camera preset instead of a layout with specific connectors.
     },
     {
-      name: 'RoomSecondaryRight',     // Name for your composition
+      name: 'RoomSecondaryRight', //Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
       codecIP: '10.0.0.100',
       mics: [8],
       connectors: [2],
@@ -166,7 +166,7 @@ const config = {
       preset: 0 // use a camera preset instead of a layout with specific connectors.
     },
     {
-      name: 'RoomSecondaryLeft',     // Name for your composition
+      name: 'RoomSecondaryLeft', // Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
       codecIP: '10.0.0.110',
       mics: [7],
       connectors: [3],
@@ -385,7 +385,8 @@ const PANEL_room_combine_PIN = `<Extensions><Version>1.8</Version>
 </Panel>        
 </Extensions>`;
 
-const PANEL_panel_combine_split = `<Extensions><Version>1.8</Version>
+
+let panel_combine_split_str = `<Extensions><Version>1.8</Version>
 <Panel>
 <Order>2</Order>
 <PanelId>panel_combine_split</PanelId>
@@ -396,24 +397,57 @@ const PANEL_panel_combine_split = `<Extensions><Version>1.8</Version>
 <Name>Room Combine Control</Name>
 <ActivityType>Custom</ActivityType>
 <Page>
-  <Name>Room Combine Control</Name>
-  <Row>
+<Name>Room Combine Control</Name>
+<Row>
+  <Name>Row</Name>
+  <Widget>
+    <WidgetId>widget_text_combine</WidgetId>
+    <Name>Combine with selected rooms</Name>
+    <Type>Text</Type>
+    <Options>size=3;fontSize=normal;align=left</Options>
+  </Widget>
+  <Widget>
+    <WidgetId>widget_toggle_combine</WidgetId>
+    <Type>ToggleButton</Type>
+    <Options>size=1</Options>
+  </Widget>
+</Row>
+<Row>
     <Name>Row</Name>
     <Widget>
-      <WidgetId>widget_text_combine</WidgetId>
-      <Name>Room combine</Name>
+      <WidgetId>notice_text</WidgetId>
+      <Name>Include in next combine:</Name>
       <Type>Text</Type>
-      <Options>size=2;fontSize=normal;align=center</Options>
+      <Options>size=3;fontSize=small;align=left</Options>
     </Widget>
+  </Row>`
+
+config.compositions.forEach(compose => {
+  if (compose.codecIP != '' && compose.codecIP != JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
+    let theWidgetId = 'widget_tog_' + compose.codecIP.replace(/\./g, "_")
+    let theName = compose.name
+    panel_combine_split_str = panel_combine_split_str + `<Row>
+    <Name>Row</Name>
     <Widget>
-      <WidgetId>widget_toggle_combine</WidgetId>
+      <WidgetId>${theWidgetId}</WidgetId>
       <Type>ToggleButton</Type>
       <Options>size=1</Options>
     </Widget>
-  </Row>
-  <Options>hideRowNames=1</Options>
+    <Widget>
+      <WidgetId>${theWidgetId}_text</WidgetId>
+      <Name>${theName}</Name>
+      <Type>Text</Type>
+      <Options>size=2;fontSize=small;align=center</Options>
+    </Widget>
+  </Row>`
+  }
+})
+
+
+const PANEL_panel_combine_split = panel_combine_split_str + `
+<Options>hideRowNames=1</Options>
 </Page>
-</Panel>          
+</Panel>
 </Extensions>`;
 
 // Join/Combine, Mute and Standby status communication between primary and secondary for 
@@ -425,15 +459,31 @@ var otherCodec = {};
 //Run your init script asynchronously 
 async function init_intercodec() {
   if (OTHER_CODEC_USERNAME != '')
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY)
+    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+      let stored_setStatus = {}
+      stored_setStatus = await GMM.read.global('JoinSplit_secondariesStatus').catch(async e => {
+        console.log("No initial JoinSplit_secondariesStatus global detected, using constants in macro to create new one")
+        return false;
+      })
       config.compositions.forEach(compose => {
         if (compose.codecIP != '' && compose.codecIP != JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
           console.log(`Setting up connection to secondary codec with IP ${compose.codecIP}`);
           otherCodec[compose.codecIP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, compose.codecIP)
           console.log(`Creating secondaries status object for this secondary codec...`)
-          secondariesStatus[compose.codecIP] = { 'inCall': false, 'online': false }
+          //make sure there is an entry for compose.codecIP in secondariesStatus, if not, create a new one 
+          if (!(compose.codecIP in secondariesStatus)) { // this secondary codec info was not in permanent storage, create
+            secondariesStatus[compose.codecIP] = { 'inCall': false, 'online': false, 'selected': true };
+          }
+          else {
+            secondariesStatus[compose.codecIP] = stored_setStatus[compose.codecIP]; // copy over what was in storage, mainly the 'selected' state
+            secondariesStatus[compose.codecIP]['inCall'] = false; // the inCall attribute should never be true when re-initting macro
+          }
         }
       })
+      await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
+        console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
+      })
+    }
     else
       otherCodec[JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
 
@@ -450,6 +500,10 @@ const localCallout = new GMM.Connect.Local(module.name.replace('./', ''))
 // roomCombined keeps the current state of join/split for the codec. It is normally also reflected in 
 // permanent storage (GMMMemory macro) in the JoinSplit_combinedState global
 var roomCombined = false;
+
+// on a secondary codec, secondarySelected reflects if it has been selected for joining from the primary or not. It is kept in persistent 
+// storage in the JoinSplit_secondarySelected key
+var secondarySelected = true;
 
 // wallSensorOverride keeps the current state of the wall sensor functionality. If it is working well it is set to false
 // If users detect a failure of the sensor, they will use the wall sensor override custom panel (PIN based or toggle button based)
@@ -679,13 +733,14 @@ async function checkCombinedStateSecondary() {
     let [pin4] = promises;
     console.log('Pin4: ' + pin4.State);
     // Change all these to whatever is needed to trigger on the Secondary when it goes into combined
-    if (pin4.State === 'Low') {
+    if (pin4.State === 'Low' && (!secondarySelected)) {
       console.log('Secondary Room is in Combined Mode');
       secondaryCombinedMode();
       displayWarning();
       //setCombinedMode(true);
       roomCombined = true;
     } else {
+      if (!secondarySelected) console.log('Secondary Room is not selected in Primary...');
       console.log('Secondary Room is in Divided Mode');
       secondaryStandaloneMode();
       removeWarning();
@@ -1171,7 +1226,7 @@ async function startAutomation() {
   micHandler = () => void 0;
   micHandler = xapi.event.on('Audio Input Connectors Microphone', (event) => {
     if (typeof micArrays[event.id[0]] != 'undefined' && (!CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
-      micArrays[event.id[0]].pop();
+      micArrays[event.id[0]].shift();
       micArrays[event.id[0]].push(event.VuMeter);
 
       // checking on manual_mode might be unnecessary because in manual mode,
@@ -1438,7 +1493,7 @@ function averageArray(arrayIn) {
   for (var i = 0; i < arrayIn.length; i++) {
     sum = sum + parseInt(arrayIn[i], 10);
   }
-  let avg = (sum / arrayIn.length) * arrayIn.length;
+  let avg = (sum / arrayIn.length);
   return avg;
 }
 
@@ -1642,7 +1697,7 @@ async function updateUSBModeConfig() {
 /////////////////////////////////////////////////////////////////////////////////////////
 // INTER-MACRO MESSAGE HANDLING
 /////////////////////////////////////////////////////////////////////////////////////////
-GMM.Event.Receiver.on(event => {
+GMM.Event.Receiver.on(async event => {
   const usb_mode_reg = /USB_Mode_Version_[0-9]*.*/gm
   if (event.Source.Id == 'localhost') {
     // we are evaluating a local event, first check to see if from the USB Mode macro
@@ -1779,6 +1834,18 @@ GMM.Event.Receiver.on(event => {
                 evalCustomPanels();
               }
               break;
+            case 'SEC_SELECTED':
+              secondarySelected = true;
+              await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
+                console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
+              })
+              break;
+            case 'SEC_REMOVED':
+              secondarySelected = false;
+              await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
+                console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
+              })
+              break;
             default:
               break;
           }
@@ -1808,6 +1875,14 @@ function sendIntercodecMessage(message) {
         console.log('Error sending message');
       });
     }
+}
+
+function sendSelectionMessage(secIP, message) {
+  if (otherCodec[secIP] != '') {
+    otherCodec[secIP].status(message).passIP().queue().catch(e => {
+      console.log(`Error sending message selection message to secondary with IP ${secIP}`);
+    });
+  }
 }
 
 GMM.Event.Queue.on(report => {
@@ -2119,6 +2194,10 @@ function evalCustomPanels() {
         else {
           xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'off' });
         }
+        Object.entries(secondariesStatus).forEach(([key, val]) => {
+          let theWidgetId = 'widget_tog_' + key.replace(/\./g, "_")
+          xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: theWidgetId, Value: (val.selected ? 'on' : 'off') });
+        })
       }
     }
   }
@@ -2327,7 +2406,17 @@ async function init() {
       })
       return false;
     })
+  } else {
+    secondarySelected = await GMM.read.global('JoinSplit_secondarySelected').catch(async e => {
+      //console.error(e);
+      console.log("No initial JoinSplit_secondarySelected global detected, creating one...")
+      await GMM.write.global('JoinSplit_secondarySelected', true).then(() => {
+        console.log({ Message: 'Init', Action: 'Combined state stored.' })
+      })
+      return false;
+    })
   }
+
 
   await init_intercodec();
 
@@ -2440,7 +2529,20 @@ function toggleBackCombineSetting(event) {
 }
 
 async function handleWidgetActions(event) {
-  switch (event.WidgetId) {
+
+  let widgetId = event.WidgetId
+  let theIP = '';
+
+  if (widgetId.length > 11) {
+    if (widgetId.slice(0, 11) == 'widget_tog_') {
+      let underIP = widgetId.slice(11);
+      theIP = underIP.replace(/_/g, ".")
+      widgetId = 'widget_tog_sec';
+    }
+  }
+
+
+  switch (widgetId) {
     case 'widget_toggle_combine':
       console.log("JoinSplit " + event.WidgetId + ' set to ' + event.Value);
       if (secondariesInCall()) {
@@ -2478,6 +2580,14 @@ async function handleWidgetActions(event) {
       }
       break;
 
+    case 'widget_tog_sec':
+      secondariesStatus[theIP].selected = (event.Value === 'on')
+      sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
+      // save new selection in permanent storage
+      await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
+        console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
+      })
+      break;
     case 'widget_pt_settings':
       let presenterSource = 0;
       let connectorDict = {};
@@ -2649,15 +2759,21 @@ function primaryInitModeChangeSensing() {
 function secondaryInitModeChangeSensing() {
   xapi.status.on('GPIO Pin 4', (state) => {
     console.log(`GPIO Pin 4[${state.id}] State went to: ${state.State}`);
-    if (state.State === 'Low') {
-      displayWarning();
-      console.log('Secondary Switched to Combined Mode [Pin 4]');
-      secondaryCombinedMode();
+    if (secondarySelected) // only check state of PIN 4 if this secondary is selected
+    {
+      if (state.State === 'Low') {
+        displayWarning();
+        console.log('Secondary Switched to Combined Mode [Pin 4]');
+        secondaryCombinedMode();
+      }
+      else if (state.State === 'High') {
+        removeWarning();
+        console.log('Secondary Switched to Divided Mode [Pin 4]');
+        secondaryStandaloneMode();
+      }
     }
-    else if (state.State === 'High') {
-      removeWarning();
-      console.log('Secondary Switched to Divided Mode [Pin 4]');
-      secondaryStandaloneMode();
+    else {
+      console.log('GPIO PIN 4 state ignored since Secondary room is not selected from Primary')
     }
   });
 }

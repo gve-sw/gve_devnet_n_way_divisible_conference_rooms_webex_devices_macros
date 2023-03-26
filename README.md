@@ -12,6 +12,10 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 - Added the divisible_room_ECS sample macro to easily add xAPI commands to drive an External Controller based on the
   divisible macro events that are triggered so that code does not have to be embedded in the macro itself in multiple places.
 
+3/25/23 Changes:
+
+- Added ability to select of de-select secondary codecs in the Room Combine Control custom panel button so that only certain secondary rooms are included when combining rooms.
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)
