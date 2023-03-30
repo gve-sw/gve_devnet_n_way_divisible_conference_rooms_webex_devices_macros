@@ -416,7 +416,7 @@ let panel_combine_split_str = `<Extensions><Version>1.8</Version>
     <Name>Row</Name>
     <Widget>
       <WidgetId>notice_text</WidgetId>
-      <Name>Include in next combine:</Name>
+      <Name>When not combined, select at least one:</Name>
       <Type>Text</Type>
       <Options>size=3;fontSize=small;align=left</Options>
     </Widget>
@@ -478,6 +478,7 @@ async function init_intercodec() {
             secondariesStatus[compose.codecIP] = stored_setStatus[compose.codecIP]; // copy over what was in storage, mainly the 'selected' state
             secondariesStatus[compose.codecIP]['inCall'] = false; // the inCall attribute should never be true when re-initting macro
           }
+          connector_to_codec_map[compose.connectors[0]] = compose.codecIP; // mapping connectors to IP of corresponding secondary
         }
       })
       await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
@@ -557,6 +558,7 @@ let primaryInCall = false;
 //let secondaryOnline = false;
 
 let secondariesStatus = {};
+let connector_to_codec_map = {}
 
 function secondariesInCall() {
   let result = false;
@@ -1527,8 +1529,16 @@ async function recallSideBySideMode() {
                 xapi.Command.Camera.Preset.Activate(sourceDict);
               }
               else {
-                console.log(`Setting Video Input to connectors [${compose.connectors}] and Layout: ${compose.layout}`);
-                sourceDict = { ConnectorId: compose.connectors, Layout: compose.layout }
+                // first need to remove connectors from un-selected secondaries
+                let selected_connectors = []
+                compose.connectors.forEach(theConnector => {
+                  // only use for overview connectors that are not associated to secondary codecs or if secondary codec is selected
+                  if ((!(theConnector in connector_to_codec_map)) || secondariesStatus[connector_to_codec_map[theConnector]].selected) {
+                    selected_connectors.push(theConnector)
+                  }
+                })
+                console.log(`Setting Video Input to connectors [${selected_connectors}] and Layout: ${compose.layout}`);
+                sourceDict = { ConnectorId: selected_connectors, Layout: compose.layout }
                 xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
               }
             }
@@ -2530,7 +2540,8 @@ function toggleBackCombineSetting(event) {
 
 async function handleWidgetActions(event) {
 
-  let widgetId = event.WidgetId
+  let widgetId = event.WidgetId;
+  let origWidgetId = event.WidgetId;
   let theIP = '';
 
   if (widgetId.length > 11) {
@@ -2581,12 +2592,37 @@ async function handleWidgetActions(event) {
       break;
 
     case 'widget_tog_sec':
-      secondariesStatus[theIP].selected = (event.Value === 'on')
-      sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
-      // save new selection in permanent storage
-      await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
-        console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
-      })
+      if (!roomCombined) { // only allow toggle of secondaries if in split mode
+        let orig_selected_stage = secondariesStatus[theIP].selected;
+        secondariesStatus[theIP].selected = (event.Value === 'on')
+        // now check to make sure we have at least one secondary
+        let at_least_one_selected = false;
+        Object.entries(secondariesStatus).forEach(([key, val]) => {
+          if (val['selected']) at_least_one_selected = true;
+        })
+        if (at_least_one_selected) {
+          sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
+          // save new selection in permanent storage
+          await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
+            console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
+          })
+        } else {
+          secondariesStatus[theIP].selected = orig_selected_stage;
+          if (event.Value === 'on') {
+            xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'off' });
+          }
+          else {
+            xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'on' });
+          }
+        }
+      } else {
+        if (event.Value === 'on') {
+          xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'off' });
+        }
+        else {
+          xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'on' });
+        }
+      }
       break;
     case 'widget_pt_settings':
       let presenterSource = 0;
