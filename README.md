@@ -16,6 +16,11 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 
 - Added ability to select of de-select secondary codecs in the Room Combine Control custom panel button so that only certain secondary rooms are included when combining rooms.
 
+4/20/23 Changes:
+
+- Removed dependency on GPIO custom cable for inter-codec communication with the secondaries
+- Added pin protection for the "Room Combine Control" custom panel
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)

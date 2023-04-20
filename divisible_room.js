@@ -75,6 +75,16 @@ const OTHER_CODEC_PASSWORD = '';
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
+// If you wish to pin-protect the room combine/split control
+// panel (when not using wall sensor), enter a numeric value for COMBINE_CONTROL_PIN
+// otherwise leave it blank: ""
+const COMBINE_CONTROL_PIN = "9999"
+
+// For more reliability when combining and dividing rooms you can use a custom cable connecting the 
+// GPIO pins 2-4 between the primary codec and secondary codecs. This cable cannot be used if you have 
+// a setup where you need to "promote" a secondary room to primary to accomodate specific room layouts
+// in which case the value should be false.
+const USE_GPIO_INTERCODEC = true;
 
 // USE_WALL_SENSOR controls if you use a physical wall sensor or not
 // If set to false, you will get a custom panel to manually switch rooms from join to split
@@ -450,8 +460,6 @@ const PANEL_panel_combine_split = panel_combine_split_str + `
 </Panel>
 </Extensions>`;
 
-// Join/Combine, Mute and Standby status communication between primary and secondary for 
-// is happening via GPIO Pins but the otherCodec object is used for all other events.
 
 //Declare your object for GMM communication
 var otherCodec = {};
@@ -710,7 +718,7 @@ function initialCombinedJoinState() {
     console.log('Primary Room is in Combined Mode');
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
       primaryCombinedMode();
-      setGPIOPin4ToLow();
+      if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow();
       if (!USE_WALL_SENSOR) {
         xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'On' });
       }
@@ -720,7 +728,7 @@ function initialCombinedJoinState() {
     console.log('Primary Room is in Divided Mode');
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
       setPrimaryDefaultConfig();
-      setGPIOPin4ToHigh();
+      if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh();
     }
     setCombinedMode(false);
   }
@@ -731,28 +739,32 @@ function initialCombinedJoinState() {
   * This will initialize the room state to Combined or Divided based on the Pin 4 set by Primary
 **/
 async function checkCombinedStateSecondary() {
-  Promise.all([xapi.status.get('GPIO Pin 4')]).then(promises => {
+  if (USE_GPIO_INTERCODEC) Promise.all([xapi.status.get('GPIO Pin 4')]).then(promises => {
     let [pin4] = promises;
     console.log('Pin4: ' + pin4.State);
     // Change all these to whatever is needed to trigger on the Secondary when it goes into combined
     if (pin4.State === 'Low' && (!secondarySelected)) {
       console.log('Secondary Room is in Combined Mode');
-      secondaryCombinedMode();
-      displayWarning();
-      //setCombinedMode(true);
-      roomCombined = true;
+      setSecondaryToCombined();
     } else {
       if (!secondarySelected) console.log('Secondary Room is not selected in Primary...');
       console.log('Secondary Room is in Divided Mode');
-      secondaryStandaloneMode();
-      removeWarning();
-      //setCombinedMode(false);
-      roomCombined = false;
+      setSecondaryToSplit();
       // since we are in secondary codec and in split configuration, we need to 
       // prepare to do basic switching to support PresenterTrack QA mode. 
       init_switching();
     }
   }).catch(e => console.debug(e));
+  else { // not using GPIO PINs
+    if (roomCombined) {
+      console.log('Secondary was set to Combined Mode in permanent storage');
+      setSecondaryToCombined();
+    }
+    else {
+      console.log('Secondary set to Divided Mode in permanent storage');
+      setSecondaryToSplit();
+    }
+  }
 }
 
 /**
@@ -804,7 +816,7 @@ function primaryInitPartitionSensor() {
         console.log('Primary Switched to Combined Mode [Partition Sensor]');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
           primaryCombinedMode();
-          setGPIOPin4ToLow();
+          if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
           if (!USE_WALL_SENSOR) {
             xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'On' });
           }
@@ -817,7 +829,7 @@ function primaryInitPartitionSensor() {
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
           primaryStandaloneMode();
           //primaryCodecSendScreen();
-          setGPIOPin4ToHigh();
+          if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
           if (!USE_WALL_SENSOR) {
             xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'Off' });
           }
@@ -900,6 +912,7 @@ async function setPrimaryDefaultConfig() {
   // GPIO
   xapi.config.set('GPIO Pin 1 Mode', 'InputNoAction')
     .catch((error) => { console.error("33" + error); });
+
   xapi.config.set('GPIO Pin 2 Mode', 'OutputManualState')
     .catch((error) => { console.error("34" + error); });
   xapi.config.set('GPIO Pin 3 Mode', 'OutputManualState')
@@ -1844,6 +1857,22 @@ GMM.Event.Receiver.on(async event => {
                 evalCustomPanels();
               }
               break;
+            case 'COMBINE':
+              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && secondarySelected) {
+                setCombinedMode(true); // Stores status to permanent storage
+                displayWarning();
+                console.log('Secondary received command to combine');
+                secondaryCombinedMode();
+              }
+              break;
+            case 'DIVIDE':
+              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && secondarySelected) {
+                setCombinedMode(false); // Stores status to permanent storage
+                removeWarning();
+                console.log('Secondary received command to divide');
+                secondaryStandaloneMode();
+              }
+              break;
             case 'SEC_SELECTED':
               secondarySelected = true;
               await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
@@ -1855,6 +1884,18 @@ GMM.Event.Receiver.on(async event => {
               await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
                 console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
               })
+              break;
+            case 'MUTE':
+              xapi.command('Audio Microphones Mute');
+              break;
+            case 'UNMUTE':
+              xapi.command('Audio Microphones Unmute');
+              break;
+            case 'STANDBY_ON':
+              xapi.command('Standby Activate');
+              break;
+            case 'STANDBY_OFF':
+              xapi.command('Standby Deactivate');
               break;
             default:
               break;
@@ -2416,7 +2457,17 @@ async function init() {
       })
       return false;
     })
-  } else {
+  } else { // Here for when in secondary codec
+    if (!USE_GPIO_INTERCODEC) { // When not using GPIO cable, we have to rely on permanent storage value in secondary as well
+      roomCombined = await GMM.read.global('JoinSplit_combinedState').catch(async e => {
+        //console.error(e);
+        console.log("No initial JoinSplit_combinedState global detected, creating one...")
+        await GMM.write.global('JoinSplit_combinedState', false).then(() => {
+          console.log({ Message: 'Init', Action: 'Combined state stored.' })
+        })
+        return false;
+      })
+    }
     secondarySelected = await GMM.read.global('JoinSplit_secondarySelected').catch(async e => {
       //console.error(e);
       console.log("No initial JoinSplit_secondarySelected global detected, creating one...")
@@ -2519,9 +2570,11 @@ async function init() {
     setSecondaryDefaultConfig();
     // start sensing changes in PIN 4 to switch room modes. This can be set by wall sensor
     // or custom touch10 UI on PRIMARY codec
-    secondaryInitModeChangeSensing();
-    secondaryStandbyControl();
-    secondaryMuteControl();
+    if (USE_GPIO_INTERCODEC) {
+      secondaryInitModeChangeSensing();
+      secondaryStandbyControl();
+      secondaryMuteControl();
+    }
     checkCombinedStateSecondary();
   }
 
@@ -2580,13 +2633,13 @@ async function handleWidgetActions(event) {
         });
         toggleBackCombineSetting(event)
       }
-      else {
+      else { // we can now safely split/combine
         if (event.Value === 'on') {
-          setGPIOPin4ToLow();
+          if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
 
         }
         else if (event.Value === 'off') {
-          setGPIOPin4ToHigh();
+          if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
         }
       }
       break;
@@ -2687,23 +2740,48 @@ xapi.event.on('UserInterface Extensions Widget Action', (event) => handleWidgetA
 
 
 xapi.event.on('UserInterface Extensions Panel Clicked', (event) => {
-  if (event.PanelId == 'room_combine_PIN') {
-    console.log("Room Combine PIN button clicked");
-    handleMacroStatus();
-    xapi.command("UserInterface Message TextInput Display",
-      {
-        Title: "Wall Sensor Override Control",
-        Text: 'Please input the necessary PIN to Split,Combine or report fixed sensor:',
-        FeedbackId: 'roomCombine',
-        InputType: 'PIN',
-        SubmitText: 'Submit'
-      }).catch((error) => { console.error(error); });
+
+  switch (event.PanelId) {
+    case 'room_combine_PIN':
+      console.log("Room Combine PIN button clicked");
+      handleMacroStatus();
+      xapi.command("UserInterface Message TextInput Display",
+        {
+          Title: "Wall Sensor Override Control",
+          Text: 'Please input the necessary PIN to Split,Combine or report fixed sensor:',
+          FeedbackId: 'roomCombine',
+          InputType: 'PIN',
+          SubmitText: 'Submit'
+        }).catch((error) => { console.error(error); });
+      break;
+    case 'panel_combine_split':
+      console.log('Room Combine/Split panel invoked...');
+      handleMacroStatus();
+      if (COMBINE_CONTROL_PIN != '') {
+        xapi.command("UserInterface Message TextInput Display",
+          {
+            Title: "Room Combine Control",
+            Text: 'Please input the necessary PIN access the room combine/split control panel:',
+            FeedbackId: 'combineControl',
+            InputType: 'PIN',
+            SubmitText: 'Submit'
+          }).catch((error) => { console.error(error); });
+      }
+      break;
   }
-  if (event.PanelId == 'panel_combine_split') {
-    console.log('Room Combine/Split panel invoked...');
-    handleMacroStatus();
+
+});
+
+xapi.Event.UserInterface.Message.TextInput.Clear.on(event => {
+  console.log(`Cleared!`, event)
+  switch (event.FeedbackId) {
+    case 'combineControl':
+      xapi.Command.UserInterface.Extensions.Panel.Close();
+      break;
+
   }
 });
+
 
 xapi.event.on('UserInterface Message TextInput Response', (event) => {
 
@@ -2734,7 +2812,7 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
         switch (event.Text) {
           case COMBINE_PIN:
             if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
-              setGPIOPin4ToLow();
+              if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
               setCombinedMode(true);
               // once they manually set the combined/join state, we must 
               // store the override state in persistent memory
@@ -2744,7 +2822,7 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
 
           case SPLIT_PIN:
             if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
-              setGPIOPin4ToHigh();
+              if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
               setCombinedMode(false);
               // once they manually set the combined/join state, we must 
               // store the override state in persistent memory
@@ -2770,9 +2848,37 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
               });
         }
       }
+    case 'combineControl':
+      if (event.Text == COMBINE_CONTROL_PIN) {
+        console.log('Correct pin for combine/split panel entered...')
+      }
+      else {
+        xapi.command("UserInterface Message Alert Display",
+          {
+            Title: 'Incorrect Pin',
+            Text: 'Please contact administrator to adjust room settings',
+            Duration: 3
+          });
+        xapi.Command.UserInterface.Extensions.Panel.Close();
+      }
   }
 });
 
+function primaryTriggerCombine() {
+  sendIntercodecMessage("COMBINE");
+  alertJoinedScreen();
+  console.log('Primary Switched to Combined Mode sending message "COMBINE" to secondaries');
+  primaryCombinedMode();
+  setCombinedMode(true);
+}
+
+function primaryTriggerDivide() {
+  sendIntercodecMessage("DIVIDE");
+  alertSplitScreen();
+  console.log('Primary Switched to Divided Mode sneding message "DIVIDE" to secondaries');
+  primaryStandaloneMode();
+  setCombinedMode(false);
+}
 
 function primaryInitModeChangeSensing() {
   xapi.status.on('GPIO Pin 4', (state) => {
@@ -2792,20 +2898,28 @@ function primaryInitModeChangeSensing() {
   });
 }
 
+function setSecondaryToCombined() {
+  displayWarning();
+  secondaryCombinedMode();
+}
+
+function setSecondaryToSplit() {
+  removeWarning();
+  secondaryStandaloneMode();
+}
+
 function secondaryInitModeChangeSensing() {
   xapi.status.on('GPIO Pin 4', (state) => {
     console.log(`GPIO Pin 4[${state.id}] State went to: ${state.State}`);
     if (secondarySelected) // only check state of PIN 4 if this secondary is selected
     {
       if (state.State === 'Low') {
-        displayWarning();
         console.log('Secondary Switched to Combined Mode [Pin 4]');
-        secondaryCombinedMode();
+        setSecondaryToCombined();
       }
       else if (state.State === 'High') {
-        removeWarning();
         console.log('Secondary Switched to Divided Mode [Pin 4]');
-        secondaryStandaloneMode();
+        setSecondaryToSplit();
       }
     }
     else {
@@ -2820,10 +2934,10 @@ function listenToMute() {
     console.log("Global Mute: " + value);
     if (roomCombined === true) {
       if (value === 'On') {
-        setGPIOPin2ToLow();
+        if (USE_GPIO_INTERCODEC) setGPIOPin2ToLow(); else sendIntercodecMessage("MUTE");
       }
       else if (value === 'Off') {
-        setGPIOPin2ToHigh();
+        if (USE_GPIO_INTERCODEC) setGPIOPin2ToHigh(); else sendIntercodecMessage("UNMUTE");
       }
     }
   });
@@ -2834,10 +2948,10 @@ function listenToStandby() {
     console.log("Standby State: " + state);
     if (roomCombined === true) {
       if (state === 'Standby') {
-        setGPIOPin3ToLow();
+        if (USE_GPIO_INTERCODEC) setGPIOPin3ToLow(); else sendIntercodecMessage("STANDBY_ON");
       }
       else if (state === 'Off') {
-        setGPIOPin3ToHigh();
+        if (USE_GPIO_INTERCODEC) setGPIOPin3ToHigh(); else sendIntercodecMessage("STANDBY_OFF");
       }
     }
   });
