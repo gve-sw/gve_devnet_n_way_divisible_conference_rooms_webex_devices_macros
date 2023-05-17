@@ -10,21 +10,39 @@ reserved. Unless required by applicable law or agreed to separately in
 writing, software distributed under the License is distributed on an "AS
 IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied.
+*
+*
+* Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
+* Macro file: divisible_room
+* Version: 2.1.2
+* Released: May 17, 2023
+* Latest RoomOS version tested: 11.4
+*
+* Macro Author:      	Gerardo Chaves
+*                    	Technical Solutions Architect
+*                    	gchaves@cisco.com
+*                    	Cisco Systems
+*
+* Consulting Engineer: Robert(Bobby) McGonigle Jr
+*                    	 Technical Marketing Engineer
+*                    	 bomcgoni@cisco.com
+*                    	 Cisco Systems
+* 
+*    
+* 
+*    As a macro, the features and functions of this webex devices executive room voice activated 
+*    switching macro are not supported by Cisco TAC
+* 
+*    Hardware and Software support are provided by their respective manufacturers 
+*      and the service agreements they offer
+*    
+*    Should you need assistance with this macro, reach out to your Cisco sales representative
+*    so they can engage the GVE DevNet team. 
 */
 
 import xapi from 'xapi';
 import { GMM } from './GMM_Lib'
 
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ This is the standalone versions of the join/split macro module meant to work together with the Switcher 
-and future Ducker and USBMode modules via events on the same codec and across codecs with the GMM library.
-+ Communications needed between Primary and Secondary codecs to keep the codec awake and set the correct 
-+ video layouts is delegated to the VoiceSwitch macros that should be installed and configured on the corresponding rooms 
-+ IMPORTANT: Turn on the JoinSplit macro on the Primary codec before turning it on in Secondary to give the macro a chance
-+ to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-*/
 
 const minOS10Version = '10.17.1.0';
 const minOS11Version = '11.2.1.0';
@@ -197,14 +215,10 @@ const config = {
 }
 
 
-// This macro supports one QuadCam or one SpeakerTrack 60 camera array on each the Primary or
-// secondary comment. Please specify below which one you are using and, if using the SP60 camera array,
-// specify in constant OVERVIEW_SINGLE_SOURCE_ID connector correspond to one of the 2 cameras to use for 
-// when showing an overview of the room. If using a QuadCam the value of OVERVIEW_SINGLE_SOURCE_ID should match 
-// the connector ID where the camera is connected. 
-const QUAD_CAM_ID = 1; // set to 0 if using SP60
-const SP60_CAM_LEFT_ID = 0; // set to 0 if using QuadCam
-const SP60_CAM_RIGHT_ID = 0; // set to 0 if using QuadCam
+
+const QUAD_CAM_ID = 1;
+
+
 const OVERVIEW_SINGLE_SOURCE_ID = 1;
 
 // In RoomOS 11 there are multiple SpeakerTrack default behaviors to choose from on the navigator or
@@ -462,7 +476,7 @@ const PANEL_panel_combine_split = panel_combine_split_str + `
 
 
 //Declare your object for GMM communication
-var otherCodec = {};
+var otherCodecs = {};
 
 //Run your init script asynchronously 
 async function init_intercodec() {
@@ -473,10 +487,13 @@ async function init_intercodec() {
         console.log("No initial JoinSplit_secondariesStatus global detected, using constants in macro to create new one")
         return false;
       })
+      let codecIPArray = [];
+
       config.compositions.forEach(compose => {
         if (compose.codecIP != '' && compose.codecIP != JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
           console.log(`Setting up connection to secondary codec with IP ${compose.codecIP}`);
-          otherCodec[compose.codecIP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, compose.codecIP)
+          //otherCodec[compose.codecIP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, compose.codecIP)
+          codecIPArray.push(compose.codecIP);
           console.log(`Creating secondaries status object for this secondary codec...`)
           //make sure there is an entry for compose.codecIP in secondariesStatus, if not, create a new one 
           if (!(compose.codecIP in secondariesStatus)) { // this secondary codec info was not in permanent storage, create
@@ -489,12 +506,16 @@ async function init_intercodec() {
           connector_to_codec_map[compose.connectors[0]] = compose.codecIP; // mapping connectors to IP of corresponding secondary
         }
       })
+
+      otherCodecs = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, codecIPArray)
+      //console.log(otherCodecs)
+
       await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
         console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
       })
     }
     else
-      otherCodec[JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+      otherCodecs = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
 
 
 }
@@ -681,20 +702,6 @@ function setWallSensorOverride(overrideValue) {
 
 }
 
-function getSTCameraID() {
-  let theResult = 1;
-  if (ST_ACTIVE_CONNECTOR != 0) {
-    theResult = ST_ACTIVE_CONNECTOR;
-  }
-  else { // if the codec has not reported the current active connector, we will use whatever
-    // was configured in the macro for the ID of the speakertracking camera
-    if (QUAD_CAM_ID != 0) theResult = QUAD_CAM_ID;
-    else if (SP60_CAM_LEFT_ID != 0) theResult = SP60_CAM_LEFT_ID; // we can only guess which of the SP60 cameras is active, so try the left one first
-    else if (SP60_CAM_RIGHT_ID != 0) theResult = SP60_CAM_RIGHT_ID; // of left SP60 camera not specified, we try the right one. 
-    else console.warn('No speaker tracking connector IDs where specified!! Defaulting to 1') // if not thing was configured, set to one but give a warning
-  }
-  return theResult;
-}
 
 async function storeSecondarySettings(ultraSoundMaxValue, wState, sState) {
   JoinSplit_secondary_settings.UltrasoundMax = ultraSoundMaxValue;
@@ -1209,7 +1216,7 @@ async function startAutomation() {
   allowCameraSwitching = true;
 
   if (inSideBySide) {
-    var currentSTCameraID = getSTCameraID();
+    var currentSTCameraID = QUAD_CAM_ID;
     let sourceDict = { SourceID: '0' }
     sourceDict["SourceID"] = currentSTCameraID.toString();
     xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
@@ -1274,7 +1281,7 @@ function stopAutomation() {
   xapi.Command.Audio.VuMeter.StopAll({});
 
   if (inSideBySide) {
-    var currentSTCameraID = getSTCameraID();
+    var currentSTCameraID = QUAD_CAM_ID;
     let sourceDict = { SourceID: '0' }
     sourceDict["SourceID"] = currentSTCameraID.toString();
     xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
@@ -1362,8 +1369,9 @@ async function makeCameraSwitch(input, average) {
 
   // map the loudest mic to the corresponding composition which could be local or from a 
   // secondary codec.
-  var currentSTCameraID = getSTCameraID();
+  var currentSTCameraID = QUAD_CAM_ID;
   let sourceDict = { SourceID: '0' } // Just initialize
+  //let selectedSource = JS_NONE; //TODO: this is a workaround
   config.compositions.forEach(compose => {
     if (compose.mics.includes(input)) {
       console.log(`Setting to composition = ${compose.name}`);
@@ -1375,6 +1383,7 @@ async function makeCameraSwitch(input, average) {
       else {
         console.log(`Setting Video Input to connectors [${compose.connectors}] and Layout: ${compose.layout}`);
         sourceDict = { ConnectorId: compose.connectors, Layout: compose.layout }
+        //selectedSource = compose.source;// TODO: this is a workaround 
         //xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
       }
     }
@@ -1405,15 +1414,19 @@ async function makeCameraSwitch(input, average) {
     //xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
 
     // Apply the composition for active mic
-    console.log(`Switching to ${sourceDict} `)
+    //console.log(`Switching to ${sourceDict} `)
+    console.log(`Switching to ${JSON.stringify(sourceDict)}`)
     if ('PresetId' in sourceDict) xapi.Command.Camera.Preset.Activate(sourceDict)
     else xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
 
     lastSourceDict = sourceDict;
 
-    if ('ConnectorId' in sourceDict && currentSTCameraID in sourceDict['ConnectorId']) {
+    // TODO: confirm this logic now does resume speakertrack. 
+    if (('ConnectorId' in sourceDict) && sourceDict['ConnectorId'].includes(currentSTCameraID)) {
       resumeSpeakerTrack();
     }
+
+    //if (selectedSource == JS_PRIMARY) resumeSpeakerTrack(); //TODO: this is a workaround, only works if just one QuadCam on Primary and no other cameras
 
     // send required messages to auxiliary codec that also turns on speakertrack over there
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) sendIntercodecMessage('automatic_mode');
@@ -1481,7 +1494,7 @@ function setComposedQAVideoSource(connectorDict) {
   }, 250) //250ms delay to allow the main source to resolve first
 
   // only disable background mode if the audience camera is a QuadCam
-  if (connectorDict.ConnectorId[1] == getSTCameraID()) resumeSpeakerTrack(); //TODO: Check here
+  if (connectorDict.ConnectorId[1] == QUAD_CAM_ID) resumeSpeakerTrack(); //TODO: Test it is indeed working in QA mode
 
   //if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Unmute();
   if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
@@ -1569,6 +1582,7 @@ async function recallSideBySideMode() {
             }, 250) //250ms delay to allow the main source to resolve first
             pauseSpeakerTrack();
             xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
+
           }
 
         }
@@ -1617,7 +1631,7 @@ async function recallQuadCam() {
   console.log("Recalling QuadCam after manually exiting PresenterTrack mode....")
   pauseSpeakerTrack();
   if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
-  let currentSTCameraID = getSTCameraID();
+  let currentSTCameraID = QUAD_CAM_ID;
   console.log('In recallQuadCam Obtained currentSTCameraID as: ', currentSTCameraID)
   let connectorDict = { SourceId: currentSTCameraID }; xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict = connectorDict;
@@ -1788,6 +1802,7 @@ GMM.Event.Receiver.on(async event => {
   else { // This section is for handling messages sent from primary to secondary codec and vice versa
     switch (event.App) { //Based on the App (Macro Name), I'll run some code
       case 'divisible_room':
+        console.warn("Received from other codec: ", event.Value)
         if (event.Type == 'Error') {
           console.error(event)
         } else {
@@ -1897,6 +1912,10 @@ GMM.Event.Receiver.on(async event => {
             case 'STANDBY_OFF':
               xapi.command('Standby Deactivate');
               break;
+            case 'STANDBY_HALFWAKE':
+              xapi.command('Standby Halfwake');
+              break;
+
             default:
               break;
           }
@@ -1920,13 +1939,19 @@ GMM.Event.Receiver.on(async event => {
 /////////////////////////////////////////////////////////////////////////////////////////
 
 function sendIntercodecMessage(message) {
+  /*
   for (const keyIP in otherCodec)
     if (otherCodec[keyIP] != '') {
       otherCodec[keyIP].status(message).passIP().queue().catch(e => {
         console.log('Error sending message');
       });
     }
+    */
+  otherCodecs.status(message).passIP().queue().catch(e => {
+    console.log('Error sending message');
+  });
 }
+
 
 function sendSelectionMessage(secIP, message) {
   if (otherCodec[secIP] != '') {
@@ -2001,6 +2026,7 @@ function handleMicMuteOff() {
   //activateSpeakerTrack();
 }
 
+/* TODO: remove
 function handleWakeUp() {
   console.log('handleWakeUp');
   // stop automatic switching behavior
@@ -2021,6 +2047,7 @@ function handleShutDown() {
   // send required messages to other codecs
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) sendIntercodecMessage('shut_down');
 }
+*/
 
 // function to check the satus of the macros running on the secondary codecs
 function handleMacroStatus() {
@@ -2189,6 +2216,7 @@ xapi.Status.Cameras.SpeakerTrack.Availability
 // evalSpeakerTrack handles the turning on/off of automation manually based on selection
 // of SpeakerTrack by user
 function evalSpeakerTrack(value) {
+  console.log('Received speakerTrack event: ', value)
   if (value == 'Active') {
     //if (macroTurnedOnST) {macroTurnedOnST=false;}
     //else {startAutomation();}
@@ -2276,15 +2304,16 @@ async function init_switching() {
     }
   });
 
+  /*
   // register event handlers for local events
   xapi.Status.Standby.State.on(value => {
     console.log(value);
-    if (!roomCombined) {
+    if (roomCombined) {
       if (value == "Off") handleWakeUp();
       if (value == "Standby") handleShutDown();
     }
   });
-
+*/
 
   // register handler for Call Successful
   xapi.Event.CallSuccessful.on(async () => {
@@ -2558,8 +2587,8 @@ async function init() {
     // or custom touch10 UI on PRIMARY codec
     primaryInitModeChangeSensing();
 
-    listenToStandby();
-    listenToMute();
+    primaryListenToStandby();
+    primaryListenToMute();
     // Primary room always needs to initialize basic switching for both
     // split and joined mode. For secondary we do that inside event handler
     // for Pin4 which governs if split or joined. 
@@ -2575,6 +2604,7 @@ async function init() {
       secondaryStandbyControl();
       secondaryMuteControl();
     }
+    secondaryListenToStandby();
     checkCombinedStateSecondary();
   }
 
@@ -2929,7 +2959,7 @@ function secondaryInitModeChangeSensing() {
 }
 
 
-function listenToMute() {
+function primaryListenToMute() {
   xapi.Status.Audio.Microphones.Mute.on(value => {
     console.log("Global Mute: " + value);
     if (roomCombined === true) {
@@ -2943,19 +2973,42 @@ function listenToMute() {
   });
 }
 
-function listenToStandby() {
-  xapi.status.on('Standby State', (state) => {
+function primaryListenToStandby() {
+  xapi.Status.Standby.State.on((state) => {
     console.log("Standby State: " + state);
-    if (roomCombined === true) {
-      if (state === 'Standby') {
+    if (state === 'Standby') {
+      if (roomCombined === true) {
         if (USE_GPIO_INTERCODEC) setGPIOPin3ToLow(); else sendIntercodecMessage("STANDBY_ON");
       }
-      else if (state === 'Off') {
+    }
+    else if (state === 'Off') {
+      // Need to turn off automation when coming out of standby since that seems to turn back on
+      // speakertrack which in turn turns on automation
+      stopAutomation();
+      if (roomCombined === true) {
         if (USE_GPIO_INTERCODEC) setGPIOPin3ToHigh(); else sendIntercodecMessage("STANDBY_OFF");
       }
     }
+    else if (state === 'Halfwake') {
+      if (roomCombined === true) {
+        if (!USE_GPIO_INTERCODEC) sendIntercodecMessage("STANDBY_HALFWAKE");
+      }
+    }
+
   });
 }
+
+function secondaryListenToStandby() {
+  xapi.Status.Standby.State.on((state) => {
+    console.log("Standby State: " + state);
+    // Need to turn off automation when coming out of standby since that seems to turn back on
+    // speakertrack which in turn turns on automation
+    if (state === 'Off') {
+      stopAutomation();
+    }
+  });
+}
+
 
 function secondaryStandbyControl() {
   xapi.status.on('GPIO Pin 3', (state) => {
@@ -2965,6 +3018,7 @@ function secondaryStandbyControl() {
     }
     else if (state.State === 'High') {
       xapi.command('Standby Deactivate');
+      stopAutomation();
     }
   });
 }

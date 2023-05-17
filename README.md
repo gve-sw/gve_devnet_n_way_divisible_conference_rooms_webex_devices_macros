@@ -21,6 +21,13 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 - Removed dependency on GPIO custom cable for inter-codec communication with the secondaries
 - Added pin protection for the "Room Combine Control" custom panel
 
+5/27/23 Changes:
+
+- Added versioning (currently at version 2.1.2)
+- Updated installation instructions
+- Fixed issue with restoring speakertrack on primary room after exiting side-by-side view
+- changes to GMM connection object instantiation to improve reliability
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)
@@ -41,7 +48,7 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 
 Follow the [Version 3 Two-way System Drawing](./Version_3_Two-way_System_Drawing.pdf) diagrams for hardware setup.
 
-For configuration setup and further hardware setup instructions, refer to the [Installation Instructions for N-Way Divisible Conference Rooms Version 1.0](./Installation_Instructions_for_N_Way_Divisible_Conference_Rooms_Version_1_0.pdf) document in this repository.
+For configuration setup and further hardware setup instructions, refer to the [Installation Instructions for N-Way Divisible Conference Rooms Version 3.1](./Installation_Instructions_for_N_Way_Divisible_Conference_Rooms_Version_3_1.pdf) document in this repository.
 
 Install GMM_Lib.js and join_split.js on each codec (primary and secondary)
 

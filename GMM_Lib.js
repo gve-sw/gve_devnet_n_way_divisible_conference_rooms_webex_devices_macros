@@ -615,7 +615,14 @@ export const GMM = {
     Receiver: {
       on: function (callback) {
         xapi.Event.Message.Send.on(event => {
-          let response = response = JSON.parse(event.Text)
+          let response = ""
+          try { //TODO: this will come in newer version
+            response = JSON.parse(event.Text)
+          }
+          catch (e) {
+            console.debug(`malformed GMM response, ${event.Text}`)
+            return
+          }
           if (response.Type == 'XAPI_PAYLOAD') {
             if (GMM.Config?.AllowXapiCrossTalk) {
               //Execute XAPI using Shell - To-Do
