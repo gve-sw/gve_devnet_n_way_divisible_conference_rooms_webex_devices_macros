@@ -1952,13 +1952,10 @@ function sendIntercodecMessage(message) {
   });
 }
 
-
 function sendSelectionMessage(secIP, message) {
-  if (otherCodec[secIP] != '') {
-    otherCodec[secIP].status(message).passIP().queue().catch(e => {
-      console.log(`Error sending message selection message to secondary with IP ${secIP}`);
-    });
-  }
+  otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
+    console.log(`Error sending message selection message to secondary with IP ${secIP}`);
+  });
 }
 
 GMM.Event.Queue.on(report => {
@@ -2320,7 +2317,7 @@ async function init_switching() {
 
     console.log("Starting new call timer...");
     //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
-    startAutomation();
+    await startAutomation(); //TODO: see if awaiting for startAutomation to fully finish corrects that initial speakertracking on camera even though we go straight to side by side on new calls
     recallSideBySideMode();
     startInitialCallTimer();
 
