@@ -21,12 +21,17 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 - Removed dependency on GPIO custom cable for inter-codec communication with the secondaries
 - Added pin protection for the "Room Combine Control" custom panel
 
-5/27/23 Changes:
+5/23/23 Changes:
 
 - Added versioning (currently at version 2.1.2)
 - Updated installation instructions
 - Fixed issue with restoring speakertrack on primary room after exiting side-by-side view
 - changes to GMM connection object instantiation to improve reliability
+
+5/25/23 Changes (version 2.1.3):
+
+- Modified all calls to GMM library to send inter-codec messages to be asynchronous
+- Added keep alive mechanism between primary and secondaries
 
 ## Contacts
 

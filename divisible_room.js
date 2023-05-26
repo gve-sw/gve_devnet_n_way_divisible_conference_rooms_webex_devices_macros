@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.2
-* Released: May 17, 2023
+* Version: 2.1.3
+* Released: May 25, 2023
 * Latest RoomOS version tested: 11.4
 *
 * Macro Author:      	Gerardo Chaves
@@ -290,6 +290,53 @@ const PRESENTER_QA_KEEP_COMPOSITION_TIME = 7000
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
+const enableKeepAlive = false;
+
+const keepAliveReportOnlyFails = true;
+// KA_FREQUENCY_SECONDS is the frequency in which to send keep alives to secondaries, in seconds, 
+// no less than 3 and at least 1 more than KA_CHECK_REPLIES_TIMEOUT_MS/1000
+const KA_FREQUENCY_SECONDS = 15;
+const KA_CHECK_REPLIES_TIMEOUT_MS = 2000; // time in ms to check for KA replies no less than 1000
+
+
+let secondariesKAStatus = {};
+function priHandleKeepAliveResponse(ipAddress) {
+  // called when received "VTC_KA_OK"
+  secondariesKAStatus[ipAddress].online = true;
+}
+
+function priKeepAliveStatuses() {
+  let allReportsOnline = true;
+  // check status of all KA responses and report if any missing
+  Object.entries(secondariesKAStatus).forEach(([key, val]) => {
+    if (!val.online) {
+      console.warn(`Secondary at IP: ${key} did not respond to latest keep alive`);
+      allReportsOnline = false;
+    }
+  })
+  if (!keepAliveReportOnlyFails && allReportsOnline)
+    console.log(`Received KeepAlive responses from all secondaries after ${KA_CHECK_REPLIES_TIMEOUT_MS} milliseconds. `)
+
+}
+
+async function priSendKeepAlive() {
+  //send message "VTC_KA_req" to all secondaries
+  if (!keepAliveReportOnlyFails)
+    console.log(`Sending KeepAlive messages to all secondary codecs...`)
+  Object.entries(secondariesKAStatus).forEach(([key, val]) => {
+    val.online = false;
+  })
+  await sendIntercodecMessage("VTC_KA_req");
+
+  //check for keepAlive replies KA_CHECK_REPLIES_TIMEOUT_MS miliseconds after sending
+  setTimeout(priKeepAliveStatuses, KA_CHECK_REPLIES_TIMEOUT_MS);
+}
+
+async function secSendKeepAliveResponse() {
+  // send message "VTC_KA_OK" to primary when received "VTC_KA_req"
+  await sendIntercodecMessage("VTC_KA_OK");
+
+}
 
 // Validate config settings
 async function validate_config() {
@@ -494,6 +541,8 @@ async function init_intercodec() {
           console.log(`Setting up connection to secondary codec with IP ${compose.codecIP}`);
           //otherCodec[compose.codecIP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, compose.codecIP)
           codecIPArray.push(compose.codecIP);
+          console.log(`Creating secondaries keep alive status objects`);
+          secondariesKAStatus[compose.codecIP] = { 'online': false };
           console.log(`Creating secondaries status object for this secondary codec...`)
           //make sure there is an entry for compose.codecIP in secondariesStatus, if not, create a new one 
           if (!(compose.codecIP in secondariesStatus)) { // this secondary codec info was not in permanent storage, create
@@ -517,7 +566,12 @@ async function init_intercodec() {
     else
       otherCodecs = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
 
-
+  // This schedules the keep alive messages to send from primary to secondaries, if enabled. 
+  if (enableKeepAlive && JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+    if (KA_FREQUENCY_SECONDS >= 3 && KA_CHECK_REPLIES_TIMEOUT_MS >= 1000)
+      if ((KA_FREQUENCY_SECONDS * 1000) > KA_CHECK_REPLIES_TIMEOUT_MS + 1000)
+        setInterval(priSendKeepAlive, KA_FREQUENCY_SECONDS * 1000);
+  }
 }
 
 const localCallout = new GMM.Connect.Local(module.name.replace('./', ''))
@@ -1429,7 +1483,7 @@ async function makeCameraSwitch(input, average) {
     //if (selectedSource == JS_PRIMARY) resumeSpeakerTrack(); //TODO: this is a workaround, only works if just one QuadCam on Primary and no other cameras
 
     // send required messages to auxiliary codec that also turns on speakertrack over there
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) sendIntercodecMessage('automatic_mode');
+    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
     lastActiveHighInput = input;
     restartNewSpeakerTimer();
     if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
@@ -1469,7 +1523,7 @@ async function presenterQASwitch(input, sourceDict) {
   }
 
   // send required messages to secondary codec that also turns on speakertrack over there
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) sendIntercodecMessage('automatic_mode');
+  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
 
   lastActiveHighInput = input;
   restartNewSpeakerTimer();
@@ -1600,7 +1654,7 @@ async function recallSideBySideMode() {
 
       // send side_by_side message to secondary codecs if in combined mode
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) {
-        sendIntercodecMessage('side_by_side');
+        await sendIntercodecMessage('side_by_side');
       }
 
       lastActiveHighInput = 0;
@@ -1756,7 +1810,7 @@ GMM.Event.Receiver.on(async event => {
             stopAutomation();
             usb_mode = false;
             // always tell the other codec when your are in or out of a call
-            sendIntercodecMessage('CALL_DISCONNECTED');
+            await sendIntercodecMessage('CALL_DISCONNECTED');
             if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
               // only need to keep track of codecs being in call with these
               // booleans in primary codec which is the one that initiates join/split
@@ -1777,7 +1831,7 @@ GMM.Event.Receiver.on(async event => {
             startAutomation();
             usb_mode = true;
             // always tell the other codec when your are in or out of a call
-            sendIntercodecMessage('CALL_CONNECTED');
+            await sendIntercodecMessage('CALL_CONNECTED');
             if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
               // only need to keep track of codecs being in call with these
               // booleans in primary codec which is the one that initiates join/split
@@ -1810,8 +1864,14 @@ GMM.Event.Receiver.on(async event => {
             case 'VTC-1_OK':
               handleCodecOnline(event.Source?.IPv4);
               break;
-            case "VTC-1_status":
+            case 'VTC-1_status':
               handleMacroStatusResponse();
+              break;
+            case 'VTC_KA_OK':
+              priHandleKeepAliveResponse(event.Source?.IPv4);
+              break;
+            case 'VTC_KA_req':
+              secSendKeepAliveResponse();
               break;
             case 'side_by_side':
               if (roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY)) {
@@ -1938,7 +1998,7 @@ GMM.Event.Receiver.on(async event => {
 // INTER-CODEC COMMUNICATION
 /////////////////////////////////////////////////////////////////////////////////////////
 
-function sendIntercodecMessage(message) {
+async function sendIntercodecMessage(message) {
   /*
   for (const keyIP in otherCodec)
     if (otherCodec[keyIP] != '') {
@@ -1947,13 +2007,13 @@ function sendIntercodecMessage(message) {
       });
     }
     */
-  otherCodecs.status(message).passIP().queue().catch(e => {
+  await otherCodecs.status(message).passIP().queue().catch(e => {
     console.log('Error sending message');
   });
 }
 
-function sendSelectionMessage(secIP, message) {
-  otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
+async function sendSelectionMessage(secIP, message) {
+  await otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
     console.log(`Error sending message selection message to secondary with IP ${secIP}`);
   });
 }
@@ -2047,7 +2107,7 @@ function handleShutDown() {
 */
 
 // function to check the satus of the macros running on the secondary codecs
-function handleMacroStatus() {
+async function handleMacroStatus() {
   console.log('handleMacroStatus');
   // reset tracker of responses from secondary codec
   //secondaryOnline = false;
@@ -2055,7 +2115,7 @@ function handleMacroStatus() {
     val.online = false;
   })
   // send required messages to secondary codec
-  sendIntercodecMessage('VTC-1_status');
+  await sendIntercodecMessage('VTC-1_status');
 }
 
 function handleCodecOnline(ipAddress) {
@@ -2064,9 +2124,9 @@ function handleCodecOnline(ipAddress) {
   secondariesStatus[ipAddress].online = true;
 }
 
-function handleMacroStatusResponse() {
+async function handleMacroStatusResponse() {
   console.log('handleMacroStatusResponse');
-  sendIntercodecMessage('VTC-1_OK');
+  await sendIntercodecMessage('VTC-1_OK');
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -2322,7 +2382,7 @@ async function init_switching() {
     startInitialCallTimer();
 
     // always tell the other codec when your are in or out of a call
-    sendIntercodecMessage('CALL_CONNECTED');
+    await sendIntercodecMessage('CALL_CONNECTED');
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
       // only need to keep track of codecs being in call with these
       // booleans in primary codec which is the one that initiates join/split
@@ -2345,7 +2405,7 @@ async function init_switching() {
     }
 
     // always tell the other codec when your are in or out of a call
-    sendIntercodecMessage('CALL_DISCONNECTED');
+    await sendIntercodecMessage('CALL_DISCONNECTED');
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
       // only need to keep track of codecs being in call with these
       // booleans in primary codec which is the one that initiates join/split
@@ -2369,7 +2429,7 @@ async function init_switching() {
         startInitialCallTimer();
 
         // always tell the other codec when your are in or out of a call
-        sendIntercodecMessage('CALL_CONNECTED');
+        await sendIntercodecMessage('CALL_CONNECTED');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
@@ -2388,7 +2448,7 @@ async function init_switching() {
           stopAutomation();
         }
         // always tell the other codec when your are in or out of a call
-        sendIntercodecMessage('CALL_DISCONNECTED');
+        await sendIntercodecMessage('CALL_DISCONNECTED');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
@@ -2514,14 +2574,14 @@ async function init() {
 
   // register HDMI Passhtorugh mode handlers if RoomOS 11
   if (isOSEleven) {
-    xapi.Status.Video.Output.HDMI.Passthrough.Status.on(value => {
+    xapi.Status.Video.Output.HDMI.Passthrough.Status.on(async value => {
       console.log(value)
       if (value == 'Active') {
         console.warn(`System is in Passthrough Active Mode`)
         startAutomation();
         usb_mode = true;
         // always tell the other codec when your are in or out of a call
-        sendIntercodecMessage('CALL_CONNECTED');
+        await sendIntercodecMessage('CALL_CONNECTED');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
@@ -2536,7 +2596,7 @@ async function init() {
         stopAutomation();
         usb_mode = false;
         // always tell the other codec when your are in or out of a call
-        sendIntercodecMessage('CALL_DISCONNECTED');
+        await sendIntercodecMessage('CALL_DISCONNECTED');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
@@ -2681,7 +2741,7 @@ async function handleWidgetActions(event) {
           if (val['selected']) at_least_one_selected = true;
         })
         if (at_least_one_selected) {
-          sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
+          await sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
           // save new selection in permanent storage
           await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
             console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
@@ -2891,16 +2951,16 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
   }
 });
 
-function primaryTriggerCombine() {
-  sendIntercodecMessage("COMBINE");
+async function primaryTriggerCombine() {
+  await sendIntercodecMessage("COMBINE");
   alertJoinedScreen();
   console.log('Primary Switched to Combined Mode sending message "COMBINE" to secondaries');
   primaryCombinedMode();
   setCombinedMode(true);
 }
 
-function primaryTriggerDivide() {
-  sendIntercodecMessage("DIVIDE");
+async function primaryTriggerDivide() {
+  await sendIntercodecMessage("DIVIDE");
   alertSplitScreen();
   console.log('Primary Switched to Divided Mode sneding message "DIVIDE" to secondaries');
   primaryStandaloneMode();
@@ -2957,25 +3017,25 @@ function secondaryInitModeChangeSensing() {
 
 
 function primaryListenToMute() {
-  xapi.Status.Audio.Microphones.Mute.on(value => {
+  xapi.Status.Audio.Microphones.Mute.on(async value => {
     console.log("Global Mute: " + value);
     if (roomCombined === true) {
       if (value === 'On') {
-        if (USE_GPIO_INTERCODEC) setGPIOPin2ToLow(); else sendIntercodecMessage("MUTE");
+        if (USE_GPIO_INTERCODEC) setGPIOPin2ToLow(); else await sendIntercodecMessage("MUTE");
       }
       else if (value === 'Off') {
-        if (USE_GPIO_INTERCODEC) setGPIOPin2ToHigh(); else sendIntercodecMessage("UNMUTE");
+        if (USE_GPIO_INTERCODEC) setGPIOPin2ToHigh(); else await sendIntercodecMessage("UNMUTE");
       }
     }
   });
 }
 
 function primaryListenToStandby() {
-  xapi.Status.Standby.State.on((state) => {
+  xapi.Status.Standby.State.on(async (state) => {
     console.log("Standby State: " + state);
     if (state === 'Standby') {
       if (roomCombined === true) {
-        if (USE_GPIO_INTERCODEC) setGPIOPin3ToLow(); else sendIntercodecMessage("STANDBY_ON");
+        if (USE_GPIO_INTERCODEC) setGPIOPin3ToLow(); else await sendIntercodecMessage("STANDBY_ON");
       }
     }
     else if (state === 'Off') {
@@ -2983,12 +3043,12 @@ function primaryListenToStandby() {
       // speakertrack which in turn turns on automation
       stopAutomation();
       if (roomCombined === true) {
-        if (USE_GPIO_INTERCODEC) setGPIOPin3ToHigh(); else sendIntercodecMessage("STANDBY_OFF");
+        if (USE_GPIO_INTERCODEC) setGPIOPin3ToHigh(); else await sendIntercodecMessage("STANDBY_OFF");
       }
     }
     else if (state === 'Halfwake') {
       if (roomCombined === true) {
-        if (!USE_GPIO_INTERCODEC) sendIntercodecMessage("STANDBY_HALFWAKE");
+        if (!USE_GPIO_INTERCODEC) await sendIntercodecMessage("STANDBY_HALFWAKE");
       }
     }
 
