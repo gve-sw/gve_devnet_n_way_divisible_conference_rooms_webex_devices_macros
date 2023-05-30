@@ -215,7 +215,8 @@ const config = {
 }
 
 
-
+// If you are using a SpeakerTrack 60, set QUAD_CAM_ID to the connector ID where the first camera of the array is connected 
+// and also use that ID in the connetors array in the compositions above   
 const QUAD_CAM_ID = 1;
 
 
@@ -1425,7 +1426,6 @@ async function makeCameraSwitch(input, average) {
   // secondary codec.
   var currentSTCameraID = QUAD_CAM_ID;
   let sourceDict = { SourceID: '0' } // Just initialize
-  //let selectedSource = JS_NONE; //TODO: this is a workaround
   config.compositions.forEach(compose => {
     if (compose.mics.includes(input)) {
       console.log(`Setting to composition = ${compose.name}`);
@@ -1437,8 +1437,6 @@ async function makeCameraSwitch(input, average) {
       else {
         console.log(`Setting Video Input to connectors [${compose.connectors}] and Layout: ${compose.layout}`);
         sourceDict = { ConnectorId: compose.connectors, Layout: compose.layout }
-        //selectedSource = compose.source;// TODO: this is a workaround 
-        //xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
       }
     }
   })
@@ -1475,12 +1473,10 @@ async function makeCameraSwitch(input, average) {
 
     lastSourceDict = sourceDict;
 
-    // TODO: confirm this logic now does resume speakertrack. 
     if (('ConnectorId' in sourceDict) && sourceDict['ConnectorId'].includes(currentSTCameraID)) {
       resumeSpeakerTrack();
     }
 
-    //if (selectedSource == JS_PRIMARY) resumeSpeakerTrack(); //TODO: this is a workaround, only works if just one QuadCam on Primary and no other cameras
 
     // send required messages to auxiliary codec that also turns on speakertrack over there
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
@@ -1548,7 +1544,7 @@ function setComposedQAVideoSource(connectorDict) {
   }, 250) //250ms delay to allow the main source to resolve first
 
   // only disable background mode if the audience camera is a QuadCam
-  if (connectorDict.ConnectorId[1] == QUAD_CAM_ID) resumeSpeakerTrack(); //TODO: Test it is indeed working in QA mode
+  if (connectorDict.ConnectorId[1] == QUAD_CAM_ID) resumeSpeakerTrack();
 
   //if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Unmute();
   if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
@@ -1685,7 +1681,8 @@ async function recallQuadCam() {
   console.log("Recalling QuadCam after manually exiting PresenterTrack mode....")
   pauseSpeakerTrack();
   if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
-  let currentSTCameraID = QUAD_CAM_ID;
+  //let currentSTCameraID = QUAD_CAM_ID; 
+  let currentSTCameraID = await xapi.Status.Cameras.SpeakerTrack.ActiveConnector.get(); //TODO: Test if it obtains the correct camera ID
   console.log('In recallQuadCam Obtained currentSTCameraID as: ', currentSTCameraID)
   let connectorDict = { SourceId: currentSTCameraID }; xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict = connectorDict;
@@ -2083,28 +2080,7 @@ function handleMicMuteOff() {
   //activateSpeakerTrack();
 }
 
-/* TODO: remove
-function handleWakeUp() {
-  console.log('handleWakeUp');
-  // stop automatic switching behavior
-  stopAutomation();
-  // send wakeup to secondary codec
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-    // make sure secondary is awake
-    if (roomCombined) sendIntercodecMessage('wake_up');
-    // check the satus of the macros running on the secondary codec and store it in secondariesStatus
-    // in case we need to check it in some other function
-    handleMacroStatus();
-  }
-}
 
-
-function handleShutDown() {
-  console.log('handleShutDown');
-  // send required messages to other codecs
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) sendIntercodecMessage('shut_down');
-}
-*/
 
 // function to check the satus of the macros running on the secondary codecs
 async function handleMacroStatus() {
@@ -2377,7 +2353,7 @@ async function init_switching() {
 
     console.log("Starting new call timer...");
     //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
-    await startAutomation(); //TODO: see if awaiting for startAutomation to fully finish corrects that initial speakertracking on camera even though we go straight to side by side on new calls
+    await startAutomation();
     recallSideBySideMode();
     startInitialCallTimer();
 
