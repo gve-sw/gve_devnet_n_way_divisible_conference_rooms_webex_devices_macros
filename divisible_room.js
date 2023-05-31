@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.3
-* Released: May 25, 2023
+* Version: 2.1.4
+* Released: May 31, 2023
 * Latest RoomOS version tested: 11.4
 *
 * Macro Author:      	Gerardo Chaves
@@ -158,9 +158,16 @@ const CHK_VUMETER_LOUDSPEAKER = false;
 
 
 // Change SECONDARY_COMBINED_VOLUME_CHANGE_STEPS if you want to adjust the volume on the secondary
-// codec when switching modes. Each step is equivalent to a 0.5 dB change. 
+// codec when switching modes. Each step is equivalent to a 0.5 dB change. Set the value to 0 if you wish
+// to simply set the actual volume wne combined or standalone by using the SECONDARY_COMBINED_VOLUME_COMBINED and
+// SECONDARY_COMBINED_VOLUME_STANDALONE constants below
 const SECONDARY_COMBINED_VOLUME_CHANGE_STEPS = 10
 
+// To set the volume of the secondary codecs to a specific value when combined vs when standalone, set the
+// SECONDARY_COMBINED_VOLUME_CHANGE_STEPS to 0 and specific the correct volume you wish to set the codec to using
+// the SECONDARY_COMBINED_VOLUME_COMBINED and SECONDARY_COMBINED_VOLUME_STANDALONE constants
+const SECONDARY_COMBINED_VOLUME_COMBINED = 0
+const SECONDARY_COMBINED_VOLUME_STANDALONE = 0
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -3157,6 +3164,7 @@ async function secondaryStandaloneMode() {
 
   // decrease main volume by 5Db since it was increased by the same when combining rooms
   if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Decrease({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
+  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS == 0 && SECONDARY_COMBINED_VOLUME_STANDALONE > 0) xapi.Command.Audio.Volume.Set({ Level: SECONDARY_COMBINED_VOLUME_STANDALONE });
 
   // restore secondary settings we stored away before combining
   JoinSplit_secondary_settings = await GMM.read.global('JoinSplit_secondary_settings').catch(async e => {
@@ -3227,6 +3235,7 @@ async function secondaryCombinedMode() {
 
   // increase main volume by 5db, will decrease upon splitting again
   if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Increase({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
+  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS == 0 && SECONDARY_COMBINED_VOLUME_COMBINED > 0) xapi.Command.Audio.Volume.Set({ Level: SECONDARY_COMBINED_VOLUME_COMBINED });
 
 
   //grab current secondary settings before overwriting for combining  

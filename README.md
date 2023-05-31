@@ -33,6 +33,10 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 - Modified all calls to GMM library to send inter-codec messages to be asynchronous
 - Added keep alive mechanism between primary and secondaries
 
+5/31/23 Changes (version 2.1.4):
+
+- Added mechanism to adjust system volume when combined and split so you can hard code settings for each instead of just increasing and decreasing based on number of change steps.
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)
