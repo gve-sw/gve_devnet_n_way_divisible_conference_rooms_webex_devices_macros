@@ -37,6 +37,11 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 
 - Added mechanism to adjust system volume when combined and split so you can hard code settings for each instead of just increasing and decreasing based on number of change steps.
 
+6/1/23 Changes (version 2.1.5):
+
+- Corrected code on Secondary that turns audio input on/off when combine/split from HDMI tie line from Primary specified in SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID instead of a hard coded value of connector 3
+- Stopped displaying a secondary to select in Room Combine Control custom panel when there is only one secondary configured since you cannot deselect it anyhow.
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)

@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.4
-* Released: May 31, 2023
+* Version: 2.1.5
+* Released: June 1, 2023
 * Latest RoomOS version tested: 11.4
 *
 * Macro Author:      	Gerardo Chaves
@@ -490,8 +490,9 @@ let panel_combine_split_str = `<Extensions><Version>1.8</Version>
     <Type>ToggleButton</Type>
     <Options>size=1</Options>
   </Widget>
-</Row>
-<Row>
+</Row>`
+
+let panel_combine_split_secondaries_str = `<Row>
     <Name>Row</Name>
     <Widget>
       <WidgetId>notice_text</WidgetId>
@@ -501,11 +502,13 @@ let panel_combine_split_str = `<Extensions><Version>1.8</Version>
     </Widget>
   </Row>`
 
+let secondaries_count = 0;
 config.compositions.forEach(compose => {
   if (compose.codecIP != '' && compose.codecIP != JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
+    secondaries_count += 1;
     let theWidgetId = 'widget_tog_' + compose.codecIP.replace(/\./g, "_")
     let theName = compose.name
-    panel_combine_split_str = panel_combine_split_str + `<Row>
+    panel_combine_split_secondaries_str = panel_combine_split_secondaries_str + `<Row>
     <Name>Row</Name>
     <Widget>
       <WidgetId>${theWidgetId}</WidgetId>
@@ -521,6 +524,10 @@ config.compositions.forEach(compose => {
   </Row>`
   }
 })
+
+// Only show selectable secondaries if there is more than one secondary. 
+if (secondaries_count > 1)
+  panel_combine_split_str = panel_combine_split_str + panel_combine_split_secondaries_str;
 
 
 const PANEL_panel_combine_split = panel_combine_split_str + `
@@ -1117,8 +1124,11 @@ async function setSecondaryDefaultConfig() {
     .catch((error) => { console.error("4" + error); });
   xapi.config.set('Audio Input HDMI 2 Mode', 'Off')
     .catch((error) => { console.error("5" + error); });
-  xapi.config.set('Audio Input HDMI 3 Mode', 'On')
-    .catch((error) => { console.error("5" + error); });
+  //xapi.config.set('Audio Input HDMI 3 Mode', 'On')
+  //.catch((error) => { console.error("5" + error); });
+  xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
+    .catch((error) => { console.error("5" + error); });;
+
   // This allows us of USB Passthrough
 
   // SET MICROPHONES
@@ -2315,7 +2325,7 @@ function evalCustomPanels() {
         }
         Object.entries(secondariesStatus).forEach(([key, val]) => {
           let theWidgetId = 'widget_tog_' + key.replace(/\./g, "_")
-          xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: theWidgetId, Value: (val.selected ? 'on' : 'off') });
+          xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: theWidgetId, Value: (val.selected ? 'on' : 'off') }).catch(handleMissingWigetError);
         })
       }
     }
@@ -2781,7 +2791,7 @@ async function handleWidgetActions(event) {
               console.log('QA Mode');
               console.log("Turning on PresenterTrack with QA Mode...");
               if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
-              activateSpeakerTrack();
+              activateSpeakerTrack(); //TODO: test if not activating speakertrack here when you have an SP60 allows it to work in QA mode
               //pauseSpeakerTrack();
               presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
               connectorDict = { ConnectorId: presenterSource };
@@ -3154,13 +3164,16 @@ async function secondaryStandaloneMode() {
   handleExternalController('SECONDARY_SPLIT');
   xapi.config.set('Audio Output Line 5 Mode', 'Off')
     .catch((error) => { console.error(error); });
-  xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
-    .catch((error) => { console.error("5" + error); });
+  //xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
+  // .catch((error) => { console.error("5" + error); });
+  xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('Off')
+    .catch((error) => { console.error("5" + error); });;
+
   /*
- SET ultrasound volume to stored value
- SET halfwakd mode to stored value
- SET WeakuOnMotionDetect to stored value
-  */
+SET ultrasound volume to stored value
+SET halfwakd mode to stored value
+SET WeakuOnMotionDetect to stored value
+*/
 
   // decrease main volume by 5Db since it was increased by the same when combining rooms
   if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Decrease({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
@@ -3229,8 +3242,11 @@ async function secondaryCombinedMode() {
   xapi.config.set('Audio Output Line 5 Mode', 'On')
     .catch((error) => { console.error(error); });
 
-  xapi.config.set('Audio Input HDMI 3 Mode', 'On')
+  //xapi.config.set('Audio Input HDMI 3 Mode', 'On')
+  //.catch((error) => { console.error("5" + error); });
+  xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
     .catch((error) => { console.error("5" + error); });
+
   xapi.Command.Video.Selfview.Set({ Mode: 'Off' });
 
   // increase main volume by 5db, will decrease upon splitting again
