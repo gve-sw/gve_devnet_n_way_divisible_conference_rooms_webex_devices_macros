@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.5
-* Released: June 1, 2023
+* Version: 2.1.6
+* Released: June 6, 2023
 * Latest RoomOS version tested: 11.4
 *
 * Macro Author:      	Gerardo Chaves
@@ -773,14 +773,16 @@ function setWallSensorOverride(overrideValue) {
 
 
 async function storeSecondarySettings(ultraSoundMaxValue, wState, sState) {
-  JoinSplit_secondary_settings.UltrasoundMax = ultraSoundMaxValue;
-  JoinSplit_secondary_settings.WakeupOnMotionDetection = wState;
-  JoinSplit_secondary_settings.StandbyControl = sState;
   let currentVideoMonitors = await xapi.Config.Video.Monitors.get();
-  if (currentVideoMonitors != 'Triple') JoinSplit_secondary_settings.VideoMonitors = currentVideoMonitors; // only store if going from split to combined
-  await GMM.write.global('JoinSplit_secondary_settings', JoinSplit_secondary_settings).then(() => {
-    console.log({ Message: 'ChangeState', Action: 'secondary settings for Ultrasound, WakeupOnMotionDetection , StandbyControl and VideoMonitors stored.' })
-  });
+  if (currentVideoMonitors != 'Triple') { // only store if going from split to combined... if currentVideoMonitors=='Triple' then rooms are combined!!
+    JoinSplit_secondary_settings.UltrasoundMax = ultraSoundMaxValue;
+    JoinSplit_secondary_settings.WakeupOnMotionDetection = wState;
+    JoinSplit_secondary_settings.StandbyControl = sState;
+    JoinSplit_secondary_settings.VideoMonitors = currentVideoMonitors;
+    await GMM.write.global('JoinSplit_secondary_settings', JoinSplit_secondary_settings).then(() => {
+      console.log({ Message: 'ChangeState', Action: 'secondary settings for Ultrasound, WakeupOnMotionDetection , StandbyControl and VideoMonitors stored.' })
+    });
+  }
 }
 
 
