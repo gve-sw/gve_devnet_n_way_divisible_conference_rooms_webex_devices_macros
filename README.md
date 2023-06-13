@@ -46,6 +46,12 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 
 - Corrected handling of storing to permanent storage display configuration while rooms are combined and macro restarts
 
+6/13/23 Changes (version 2.1.7)
+
+- Implemented more robust mechanism to select secondary codecs and receive confirmation that setting was propagated to target devices
+- Corrected situation where secondary in call was not being reported to primary if not using GPIO cable
+- Added console log warning when macro on secondary codec is not correctly named
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)

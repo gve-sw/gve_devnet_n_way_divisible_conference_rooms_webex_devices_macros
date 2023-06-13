@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.6
-* Released: June 6, 2023
-* Latest RoomOS version tested: 11.4
+* Version: 2.1.7
+* Released: June 13, 2023
+* Latest RoomOS version tested: 11.5.1.5
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -560,7 +560,7 @@ async function init_intercodec() {
           secondariesKAStatus[compose.codecIP] = { 'online': false };
           console.log(`Creating secondaries status object for this secondary codec...`)
           //make sure there is an entry for compose.codecIP in secondariesStatus, if not, create a new one 
-          if (!(compose.codecIP in secondariesStatus)) { // this secondary codec info was not in permanent storage, create
+          if (!(compose.codecIP in stored_setStatus)) { // this secondary codec info was not in permanent storage, create
             secondariesStatus[compose.codecIP] = { 'inCall': false, 'online': false, 'selected': true };
           }
           else {
@@ -864,6 +864,51 @@ function alertSplitScreen() {
     Duration: 10,
   });
 }
+
+/**
+  * The following functions display a message on the touch panel to alert the users
+  * that the rooms are either being selected or unselected
+**/
+function alertSelectedScreen() {
+  xapi.command('UserInterface Message Alert Display', {
+    Title: 'Selecting room to combine ...',
+    Text: 'Please wait',
+    Duration: 3,
+  });
+}
+
+function alertUnselectedScreen() {
+  xapi.command('UserInterface Message Alert Display', {
+    Title: 'Unselecting room to combine ...',
+    Text: 'Please wait',
+    Duration: 3,
+  });
+}
+
+/**
+  * The following functions display a message on the touch panel to alert the users
+  * that their select/unselect failed due secondary not responding
+**/
+function alertSelectFailedSelectionActionScreen() {
+  xapi.command('UserInterface Message Alert Display', {
+    Title: 'select/unselect failed!!',
+    Text: 'Secondary did not respond.. check logs',
+    Duration: 5,
+  });
+}
+
+/**
+  * The following functions display a message on the touch panel to alert the users
+  * that they are trying to make selections when rooms are combined which is not allowed
+**/
+function alertSelectWhenCombinedScreen() {
+  xapi.command('UserInterface Message Alert Display', {
+    Title: 'Unable to select or unselect now!!',
+    Text: 'Please split rooms and try again',
+    Duration: 5,
+  });
+}
+
 
 /**
   * Partition Sensor
@@ -1889,6 +1934,7 @@ GMM.Event.Receiver.on(async event => {
             case 'VTC_KA_req':
               secSendKeepAliveResponse();
               break;
+
             case 'side_by_side':
               if (roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY)) {
                 console.log('Handling side by side on secondary');
@@ -1969,12 +2015,20 @@ GMM.Event.Receiver.on(async event => {
               await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
                 console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
               })
+              await sendIntercodecMessage('SEC_SELECTED_ACK')
               break;
             case 'SEC_REMOVED':
               secondarySelected = false;
               await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
                 console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
               })
+              await sendIntercodecMessage('SEC_REMOVED_ACK')
+              break;
+            case 'SEC_SELECTED_ACK':
+              processSecSelectedAck(event.Source?.IPv4);
+              break;
+            case 'SEC_REMOVED_ACK':
+              processSecUnselectedAck(event.Source?.IPv4);
               break;
             case 'MUTE':
               xapi.command('Audio Microphones Mute');
@@ -1999,9 +2053,7 @@ GMM.Event.Receiver.on(async event => {
         break;
 
       default:
-        console.debug({
-          Message: `Received Message from ${event.App} and was not processed`
-        })
+        console.warn(`Received Message ${event.Value} from macro ${event.App} on remote codec but was not processed... rename macro to divisible_room if intended to work with this one.`)
         break;
     }
 
@@ -2658,6 +2710,13 @@ async function init() {
     }
     secondaryListenToStandby();
     checkCombinedStateSecondary();
+    if (!USE_GPIO_INTERCODEC) {
+      // since we are in secondary codec and in split configuration, we need to 
+      // prepare to do basic switching to support PresenterTrack QA mode. 
+      // we are only doing it here if no GPIO cable is being used, otherwised it gets
+      // done in the Pin4 event handler
+      init_switching();
+    }
   }
 
 }
@@ -2671,6 +2730,43 @@ async function init() {
 function toggleBackCombineSetting(event) {
   if (event.Value === 'on') xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: 'widget_toggle_combine', Value: 'off' })
   else xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: 'widget_toggle_combine', Value: 'on' });
+}
+
+function setWidgetSelectionSetting(activate, theIP) {
+  let underIP = theIP.replace(/\./g, "_")
+  let widgetID = 'widget_tog_' + underIP;
+  if (activate) xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: widgetID, Value: 'on' })
+  else xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: widgetID, Value: 'off' });
+}
+
+async function processSecSelectedAck(theIP) {
+  secondariesStatus[theIP].selected = true;
+  await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
+    console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
+  })
+}
+
+async function processSecUnselectedAck(theIP) {
+  secondariesStatus[theIP].selected = false;
+  await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
+    console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
+  })
+}
+
+function validateSecSelectedResponse(theIP) {
+  if (!secondariesStatus[theIP].selected) {
+    console.log(`Secondary selection command for secondary with IP ${theIP} was not acknowledged, rolling back...`)
+    setWidgetSelectionSetting(false, theIP);
+    alertSelectFailedSelectionActionScreen();
+  }
+}
+
+function validateSecUnselectedResponse(theIP) {
+  if (secondariesStatus[theIP].selected) {
+    console.log(`Secondary un-selection command for secondary with IP ${theIP} was not acknowledged, rolling back...`)
+    setWidgetSelectionSetting(true, theIP);
+    alertSelectFailedSelectionActionScreen();
+  }
 }
 
 async function handleWidgetActions(event) {
@@ -2691,7 +2787,19 @@ async function handleWidgetActions(event) {
   switch (widgetId) {
     case 'widget_toggle_combine':
       console.log("JoinSplit " + event.WidgetId + ' set to ' + event.Value);
-      if (secondariesInCall()) {
+      let at_least_one_selected = false;
+      Object.entries(secondariesStatus).forEach(([key, val]) => {
+        if (val['selected']) at_least_one_selected = true;
+      })
+      if (!at_least_one_selected) { //TODO: Test this
+        xapi.command('UserInterface Message Alert Display', {
+          Title: 'Cannot Combine/Split',
+          Text: 'You do not have any secondary codecs selected, select at least one and try again.',
+          Duration: 10,
+        });
+        toggleBackCombineSetting(event)
+      }
+      else if (secondariesInCall()) {
         xapi.command('UserInterface Message Alert Display', {
           Title: 'Cannot Combine/Split',
           Text: 'The secondary codec is in a call or in USB mode, please try after the call ends and/or USB mode is turned off.',
@@ -2728,29 +2836,30 @@ async function handleWidgetActions(event) {
 
     case 'widget_tog_sec':
       if (!roomCombined) { // only allow toggle of secondaries if in split mode
-        let orig_selected_stage = secondariesStatus[theIP].selected;
-        secondariesStatus[theIP].selected = (event.Value === 'on')
-        // now check to make sure we have at least one secondary
-        let at_least_one_selected = false;
-        Object.entries(secondariesStatus).forEach(([key, val]) => {
-          if (val['selected']) at_least_one_selected = true;
-        })
-        if (at_least_one_selected) {
-          await sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
-          // save new selection in permanent storage
-          await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
-            console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
-          })
-        } else {
-          secondariesStatus[theIP].selected = orig_selected_stage;
-          if (event.Value === 'on') {
-            xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'off' });
-          }
-          else {
-            xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'on' });
-          }
-        }
-      } else {
+
+
+        // first put up an alert on the touch device that the selection or unselection is being performed
+        // this in part is to prevent race conditions where the operator might try to combine the room
+        // before the secondary has a chance to switch selection mode and acknoledget back to primary codec
+        if (event.Value === 'on')
+          alertSelectedScreen();
+        else
+          alertUnselectedScreen();
+
+        // Send the affected secondary codec the corresponding message to SELECT or REMOVE
+        await sendSelectionMessage(theIP, (event.Value === 'on' ? 'SEC_SELECTED' : 'SEC_REMOVED'))
+
+        // schedule a check in 2 seconds to confirm that the affected secondary codec received and acknoledged 
+        // selection or deselection. In those callback functions we handle reverting the setting if no ack.
+        if (event.Value === 'on')
+          setTimeout(validateSecSelectedResponse, 2000, theIP);
+        else
+          setTimeout(validateSecUnselectedResponse, 2000, theIP);
+
+      } else { //Here we are toggling back the main combine widget since the room is combined
+        // first put up an informative alert
+        alertSelectWhenCombinedScreen();
+        // now undo the selection
         if (event.Value === 'on') {
           xapi.Command.UserInterface.Extensions.Widget.SetValue({ WidgetId: origWidgetId, Value: 'off' });
         }
