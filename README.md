@@ -52,6 +52,11 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 - Corrected situation where secondary in call was not being reported to primary if not using GPIO cable
 - Added console log warning when macro on secondary codec is not correctly named
 
+6/15/23 Changes (version 2.1.8)
+
+- Only hide Room Combine Control panel when primary codec is in a call, not when secondaries are since we still check for those not being in call before combining
+- Allow combine/split of selected rooms even if un-selected room is in a call.
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)

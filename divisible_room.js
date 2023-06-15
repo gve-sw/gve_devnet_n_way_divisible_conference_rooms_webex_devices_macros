@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.7
-* Released: June 13, 2023
+* Version: 2.1.8
+* Released: June 15, 2023
 * Latest RoomOS version tested: 11.5.1.5
 *
 * Macro Author:      	Gerardo Chaves
@@ -661,7 +661,7 @@ let connector_to_codec_map = {}
 function secondariesInCall() {
   let result = false;
   Object.entries(secondariesStatus).forEach(([key, val]) => {
-    if (val.inCall) result = true;
+    if (val.inCall && val.selected) result = true;
   })
   return result;
 }
@@ -2353,7 +2353,7 @@ function evalPresenterTrack(value) {
 function evalCustomPanels() {
 
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
-    if (primaryInCall || secondariesInCall()) {
+    if (primaryInCall) {
       xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_combine_split' });
       xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'room_combine_PIN' });
     } else {
