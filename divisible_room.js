@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.8
-* Released: June 15, 2023
+* Version: 2.1.9
+* Released: June 22, 2023
 * Latest RoomOS version tested: 11.5.1.5
 *
 * Macro Author:      	Gerardo Chaves
@@ -168,6 +168,10 @@ const SECONDARY_COMBINED_VOLUME_CHANGE_STEPS = 10
 // the SECONDARY_COMBINED_VOLUME_COMBINED and SECONDARY_COMBINED_VOLUME_STANDALONE constants
 const SECONDARY_COMBINED_VOLUME_COMBINED = 0
 const SECONDARY_COMBINED_VOLUME_STANDALONE = 0
+
+// If you would like to use the speaker on the monitor 1 in the secondary room, set SECONDARY_USE_MONITOR_AUDIO to true
+// otherwise the macro will turn off Audio on that connector
+const SECONDARY_USE_MONITOR_AUDIO = false;
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -638,6 +642,8 @@ let allowNewSpeaker = true;
 let newSpeakerTimer = null;
 let manual_mode = true;
 
+let primarySingleScreen = false;
+
 let micHandler = () => void 0;
 
 let overviewShowDouble = false;
@@ -989,6 +995,10 @@ async function setPrimaryDefaultConfig() {
   // SET MICROPHONES
   // MICROPHONES 1 THRU 7 ARE USER CONFIGURABLE
 
+
+  //TODO: Review if I have to do the commands below when I have multiple secondaries coming in or if I can just set 
+  // without the macro affecting it
+
   // MIC 8
   // THIS IS THE INPUT FOR THE MICROPHONES FROM THE SECONDARY CODEC
   xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
@@ -1125,14 +1135,17 @@ async function setPrimaryDefaultConfig() {
     case 'Dual':
       xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
       xapi.Config.Video.Output.Connector[2].MonitorRole.set('Second');
+      primarySingleScreen = false;
       break;
     case 'DualPresentationOnly':
       xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
       xapi.Config.Video.Output.Connector[2].MonitorRole.set('PresentationOnly');
+      primarySingleScreen = false;
       break;
     case 'Single':
       xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
       xapi.Config.Video.Output.Connector[2].MonitorRole.set('First');
+      primarySingleScreen = true;
       break;
   }
 
@@ -1191,8 +1204,9 @@ async function setSecondaryDefaultConfig() {
     .catch((error) => { console.error("22" + error); });
 
   // HDMI AUDIO OUTPUT
-  xapi.config.set('Audio Output HDMI 1 Mode', 'Off')
-    .catch((error) => { console.error("23" + error); });
+  if (!SECONDARY_USE_MONITOR_AUDIO)
+    xapi.config.set('Audio Output HDMI 1 Mode', 'Off')
+      .catch((error) => { console.error("23" + error); });
   xapi.config.set('Audio Output HDMI 2 Mode', 'Off')
     .catch((error) => { console.error("24" + error); });
   xapi.config.set('Audio Output HDMI 3 Mode', 'On')
@@ -2678,6 +2692,21 @@ async function init() {
     // Add CUSTOM PANEL
     evalCustomPanels();
 
+    // setting primarySingleScreen variable initially to know if we need to toggle HDMI 2 Audio Out later
+    let videoMonitors = await xapi.Config.Video.Monitors.get();
+    switch (videoMonitors) {
+      case 'Dual':
+        primarySingleScreen = false;
+        break;
+      case 'DualPresentationOnly':
+        primarySingleScreen = false;
+        break;
+      case 'Single':
+        primarySingleScreen = true;
+        break;
+    }
+
+
     // setPrimaryDefaultConfig() is called within initialCombinedJoinState() if appropriate
     initialCombinedJoinState();
 
@@ -3209,7 +3238,9 @@ async function primaryCombinedMode() {
   xapi.config.set('Conference FarEndControl Mode', 'Off')
     .catch((error) => { console.error("32" + error); });
 
-
+  if (primarySingleScreen)
+    xapi.config.set('Audio Output HDMI 2 Mode', 'On')
+      .catch((error) => { console.error("47" + error); });
 
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); });
 
@@ -3244,6 +3275,10 @@ async function primaryStandaloneMode() {
     .catch((error) => { console.error(error); });
   xapi.config.set('Conference FarEndControl Mode', 'On')
     .catch((error) => { console.error("32" + error); });
+
+  if (primarySingleScreen)
+    xapi.config.set('Audio Output HDMI 2 Mode', 'Off')
+      .catch((error) => { console.error("48" + error); });
 
   if (USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
     xapi.Config.Cameras.PresenterTrack.CameraPosition.Pan
@@ -3434,6 +3469,11 @@ xapi.Status.Cameras.SpeakerTrack.ActiveConnector.on(value => {
     // an SP60. If a QuadCam, it will always be 1 and this event wont be firing other than when turning
     // speakertracking on/off which for the secondary codec in combined mode should be only once when combining
     let sourceIDtoMatrix = (ST_ACTIVE_CONNECTOR == 0) ? 1 : ST_ACTIVE_CONNECTOR;
+    //TODO fix the problem where matrix assign below when they have SP60 camera array is only seen temporarily and goes back 
+    // it appears that as soon as I issue the Matrix command, it turns off speakertrack. I tried pausing it before issuing matrix
+    // but it does not work... need something similar to backtround mode, a safe way to switch in matrix command
+    // If not possile to SpeakerTrack with SP60 on Secondary room , then need to find a way to detect that on secondary and simply
+    // not try to speakertrack when in combined mode and keep preset 30 always so it is predictable which camera to send across the tieline
     xapi.command('Video Matrix Assign', { Output: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: sourceIDtoMatrix }).catch((error) => { console.error(error); });
   }
 });
