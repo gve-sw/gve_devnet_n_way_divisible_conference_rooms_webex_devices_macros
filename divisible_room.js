@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.9
-* Released: June 22, 2023
-* Latest RoomOS version tested: 11.5.1.5
+* Version: 2.1.10
+* Released: June 30, 2023
+* Latest RoomOS version tested: 11.5.1.9
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -565,11 +565,12 @@ async function init_intercodec() {
           console.log(`Creating secondaries status object for this secondary codec...`)
           //make sure there is an entry for compose.codecIP in secondariesStatus, if not, create a new one 
           if (!(compose.codecIP in stored_setStatus)) { // this secondary codec info was not in permanent storage, create
-            secondariesStatus[compose.codecIP] = { 'inCall': false, 'online': false, 'selected': true };
+            secondariesStatus[compose.codecIP] = { 'inCall': false, 'inPreview': false, 'online': false, 'selected': true };
           }
           else {
             secondariesStatus[compose.codecIP] = stored_setStatus[compose.codecIP]; // copy over what was in storage, mainly the 'selected' state
             secondariesStatus[compose.codecIP]['inCall'] = false; // the inCall attribute should never be true when re-initting macro
+            secondariesStatus[compose.codecIP]['inPreview'] = false; // the inPreview attribute should never be true when re-initting macro
           }
           connector_to_codec_map[compose.connectors[0]] = compose.codecIP; // mapping connectors to IP of corresponding secondary
         }
@@ -658,16 +659,16 @@ let usb_mode = false;
 let webrtc_mode = false;
 
 let primaryInCall = false;
-//let secondaryInCall = false;
-//let secondaryOnline = false;
+
+let primaryInPreview = false;
 
 let secondariesStatus = {};
 let connector_to_codec_map = {}
 
-function secondariesInCall() {
+function secondariesInCall() { //now also check for secondaries in Preview mode
   let result = false;
   Object.entries(secondariesStatus).forEach(([key, val]) => {
-    if (val.inCall && val.selected) result = true;
+    if ((val.inCall || val.inPreview) && val.selected) result = true;
   })
   return result;
 }
@@ -929,13 +930,13 @@ function primaryInitPartitionSensor() {
     else if (secondariesInCall()) {
       xapi.command('UserInterface Message Alert Display', {
         Title: 'Cannot Combine/Split',
-        Text: 'The secondary codec is in a call or in USB mode, please try after the call ends and/or USB mode is turned off.',
+        Text: 'The secondary codec is in a call, presenting or in USB mode, please try after the call ends and/or USB mode is turned off.',
         Duration: 10,
       });
-    } else if (primaryInCall) {
+    } else if (primaryInCall || primaryInPreview) {
       xapi.command('UserInterface Message Alert Display', {
         Title: 'Cannot Combine/Split',
-        Text: 'This codec is in a call or in USB mode, please try after the call ends and/or USB mode is turned off.',
+        Text: 'This codec is in a call, presenting or in USB mode, please try after the call ends and/or USB mode is turned off.',
         Duration: 10,
       });
     }
@@ -2008,6 +2009,28 @@ GMM.Event.Receiver.on(async event => {
                 evalCustomPanels();
               }
               break;
+            case 'PRESENTATION_PREVIEW_STARTED':
+              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+                // if we are the primary codec, this event came from secondary
+                // we need to keep track when secondary room is in presentation preview 
+                // in a variable in the primary to not join or combine
+                // while in that state
+                console.log("Secondary in presentation preview, setting variable...")
+                secondariesStatus[event.Source.IPv4].inPreview = true;
+                evalCustomPanels();
+              }
+              break;
+            case 'PRESENTATION_PREVIEW_STOPPED':
+              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+                // if we are the primary codec, this event came from secondary
+                // we need to keep track when secondary room is in presentation preview 
+                // in a variable in the primary to not join or combine
+                // while in that state
+                console.log("Secondary in no longer in preview, setting variable...")
+                secondariesStatus[event.Source.IPv4].inPreview = false;
+                evalCustomPanels();
+              }
+              break;
             case 'COMBINE':
               if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && secondarySelected) {
                 setCombinedMode(true); // Stores status to permanent storage
@@ -2134,14 +2157,6 @@ xapi.Event.PresentationStopped.on(value => {
     handleExternalController('PRIMARY_PRESENTATION_STOPPED');
   else
     handleExternalController('SECONDARY_PRESENTATION_STOPPED');
-});
-
-xapi.Event.PresentationPreviewStarted.on(value => {
-  console.log(value)
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY)
-    handleExternalController('PRIMARY_PREVIEW_STARTED');
-  else
-    handleExternalController('SECONDARY_PREVIEW_STARTED');
 });
 
 xapi.Event.PresentationPreviewStopped.on(value => {
@@ -2367,7 +2382,7 @@ function evalPresenterTrack(value) {
 function evalCustomPanels() {
 
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
-    if (primaryInCall) {
+    if (primaryInCall || primaryInPreview) {
       xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_combine_split' });
       xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'room_combine_PIN' });
     } else {
@@ -2478,6 +2493,36 @@ async function init_switching() {
       handleExternalController('SECONDARY_CALLDISCONNECT');
     }
   });
+
+  xapi.Event.PresentationPreviewStarted
+    .on(async value => {
+      await sendIntercodecMessage('PRESENTATION_PREVIEW_STARTED');
+      if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+        // only need to keep track of codecs being in call with these
+        // booleans in primary codec which is the one that initiates join/split
+        primaryInPreview = true;
+        evalCustomPanels();
+        handleExternalController('PRIMARY_PREVIEW_STARTED');
+      }
+      else {
+        handleExternalController('SECONDARY_PREVIEW_STARTED');
+      }
+    });
+
+  xapi.Event.PresentationPreviewStopped
+    .on(async value => {
+      await sendIntercodecMessage('PRESENTATION_PREVIEW_STOPPED');
+      if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+        // only need to keep track of codecs being in call with these
+        // booleans in primary codec which is the one that initiates join/split
+        primaryInPreview = false;
+        evalCustomPanels();
+        handleExternalController('PRIMARY_PREVIEW_STOPPED');
+      }
+      else {
+        handleExternalController('SECONDARY_PREVIEW_STOPPED');
+      }
+    });
 
   // register WebRTC Mode
   xapi.Status.UserInterface.WebView.Type
@@ -2835,11 +2880,11 @@ async function handleWidgetActions(event) {
           Duration: 10,
         });
         toggleBackCombineSetting(event)
-      } else if (primaryInCall) {
+      } else if (primaryInCall || primaryInPreview) {
         // this is only here in case we missed a scenario for disabling panel when in call
         xapi.command('UserInterface Message Alert Display', {
           Title: 'Cannot Combine/Split',
-          Text: 'This codec is in a call or in USB mode, please try after the call ends and/or USB mode is turned off.',
+          Text: 'This codec is in a call, presenting or in USB mode, please try after the call ends and/or USB mode is turned off.',
           Duration: 10,
         });
         toggleBackCombineSetting(event)
@@ -3014,10 +3059,10 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
           Text: 'A secondary codec is in a call or in USB mode, please try after the call ends and/or USB mode is turned off.',
           Duration: 10,
         });
-      } else if (primaryInCall) {
+      } else if (primaryInCall || primaryInPreview) {
         xapi.command('UserInterface Message Alert Display', {
           Title: 'Cannot Combine/Split',
-          Text: 'This codec is in a call or in USB mode, please try after the call ends and/or USB mode is turned off.',
+          Text: 'This codec is in a call, presenting or in USB mode, please try after the call ends and/or USB mode is turned off.',
           Duration: 10,
         });
       }
@@ -3474,6 +3519,13 @@ xapi.Status.Cameras.SpeakerTrack.ActiveConnector.on(value => {
     // but it does not work... need something similar to backtround mode, a safe way to switch in matrix command
     // If not possile to SpeakerTrack with SP60 on Secondary room , then need to find a way to detect that on secondary and simply
     // not try to speakertrack when in combined mode and keep preset 30 always so it is predictable which camera to send across the tieline
+    // Since in combined mode the secondary should be sending camera input through monitor connector 2 or 3 out to 
+    // the primary, the SetMainVideoSource command below instead of the Video Matrix Assign command should work... need to test. 
+    /*
+    let sourceDict = { SourceID: '0' }
+    sourceDict["SourceID"] = sourceIDtoMatrix.toString();
+    xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
+    */
     xapi.command('Video Matrix Assign', { Output: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: sourceIDtoMatrix }).catch((error) => { console.error(error); });
   }
 });

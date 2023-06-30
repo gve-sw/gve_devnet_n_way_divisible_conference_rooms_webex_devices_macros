@@ -62,6 +62,10 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 - Added an option for the use of the Monitor speakers on Secondary rooms (SECONDARY_USE_MONITOR_AUDIO) since before it was assumed they were not being used.
 - Fixed sending audio across tie line from Primary to Secondaries when using HDMI Out connector 2 for single-screen configurations that use Monitor connector 2 instead of splitter on connector 1.
 
+6/30/23 Changes (version 2.1.10)
+
+- Added handlers to detect presentation preview on primary and secondaries and now allow split/combine while presentation preview is active. Same for the primary codec. Behaves the same as when a codec is in a call: refusal to join/split and notification if secondary is in call or in presentation preview and if it is the Primary codec that is in those states, the "Room Combine Control" custom panel is hidden.
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)
