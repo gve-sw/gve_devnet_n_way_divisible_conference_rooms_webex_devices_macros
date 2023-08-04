@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.10
-* Released: June 30, 2023
-* Latest RoomOS version tested: 11.5.1.9
+* Version: 2.1.11
+* Released: August 3, 2023
+* Latest RoomOS version tested: 11.6.1.5
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -1499,14 +1499,29 @@ async function makeCameraSwitch(input, average) {
   console.log("-------------------------------------------------");
   console.log("High Triggered: ");
   console.log(`Input = ${input} | Average = ${average}`);
+  console.log(`roomCombined = ${roomCombined}`);
   console.log("-------------------------------------------------");
 
   // map the loudest mic to the corresponding composition which could be local or from a 
   // secondary codec.
   var currentSTCameraID = QUAD_CAM_ID;
   let sourceDict = { SourceID: '0' } // Just initialize
+  let initial_sourceDict = { SourceID: '0' } // to be able to compare later
   config.compositions.forEach(compose => {
     if (compose.mics.includes(input)) {
+      if ((!roomCombined && JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) && compose.source == JS_SECONDARY) {
+        console.warn(`makeCameraSwitch(): Trying to switch to composition that involves a secondary codec input when not in combined mode!!`)
+        restartNewSpeakerTimer();
+        return;
+      }
+      if ((roomCombined && JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) && compose.source == JS_SECONDARY) {
+        if (compose.codecIP in secondariesStatus)
+          if (!secondariesStatus[compose.codecIP].selected) {
+            console.warn(`makeCameraSwitch(): Trying to switch to composition that involves a secondary codec input which is not selected!!`)
+            restartNewSpeakerTimer();
+            return;
+          }
+      }
       console.log(`Setting to composition = ${compose.name}`);
       if (compose.preset != 0) {
         console.log(`Setting Video Input to preset [${compose.preset}] `);
@@ -1531,6 +1546,12 @@ async function makeCameraSwitch(input, average) {
     inSideBySide = false; // if presenterTracking, this should never be on, but clearing just in case
   }
   else if (JSON.stringify(lastSourceDict) != JSON.stringify(sourceDict)) {
+    if (JSON.stringify(sourceDict) == JSON.stringify(initial_sourceDict)) {
+      console.warn(`makeCameraSwitch(): Active mic did not match any composition and not in PresentarTrack mode... `)
+      restartNewSpeakerTimer();
+      return;
+    }
+
     if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
 
     inSideBySide = false;
@@ -1986,7 +2007,11 @@ GMM.Event.Receiver.on(async event => {
                 // while in that state
                 console.log("Secondary in call, setting variable...")
                 //secondaryInCall=true;  
-                secondariesStatus[event.Source.IPv4].inCall = true;
+                if (event.Source.IPv4 in secondariesStatus)
+                  secondariesStatus[event.Source.IPv4].inCall = true;
+                else
+                  console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+
                 evalCustomPanels();
               }
 
@@ -2004,7 +2029,10 @@ GMM.Event.Receiver.on(async event => {
                 // while in that state
                 console.log("Secondary not in call, setting variable...")
                 //secondaryInCall=false;
-                secondariesStatus[event.Source.IPv4].inCall = false;
+                if (event.Source.IPv4 in secondariesStatus)
+                  secondariesStatus[event.Source.IPv4].inCall = false;
+                else
+                  console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
 
                 evalCustomPanels();
               }
@@ -2016,7 +2044,10 @@ GMM.Event.Receiver.on(async event => {
                 // in a variable in the primary to not join or combine
                 // while in that state
                 console.log("Secondary in presentation preview, setting variable...")
-                secondariesStatus[event.Source.IPv4].inPreview = true;
+                if (event.Source.IPv4 in secondariesStatus)
+                  secondariesStatus[event.Source.IPv4].inPreview = true;
+                else
+                  console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
                 evalCustomPanels();
               }
               break;
@@ -2027,7 +2058,10 @@ GMM.Event.Receiver.on(async event => {
                 // in a variable in the primary to not join or combine
                 // while in that state
                 console.log("Secondary in no longer in preview, setting variable...")
-                secondariesStatus[event.Source.IPv4].inPreview = false;
+                if (event.Source.IPv4 in secondariesStatus)
+                  secondariesStatus[event.Source.IPv4].inPreview = false;
+                else
+                  console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
                 evalCustomPanels();
               }
               break;

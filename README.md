@@ -66,6 +66,12 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 
 - Added handlers to detect presentation preview on primary and secondaries and now allow split/combine while presentation preview is active. Same for the primary codec. Behaves the same as when a codec is in a call: refusal to join/split and notification if secondary is in call or in presentation preview and if it is the Primary codec that is in those states, the "Room Combine Control" custom panel is hidden.
 
+8/3/23 Changes (version 2.1.11)
+
+- Added protections so that Primary never switches to a video input coming from a secondary when in standalone mode even if somehow the associated audio input has audio activity (output on secondary out line 5 should have been turned off when switching to standalone). Also for when Primary is in combined mode but audio from a non-selected secondary room is somehow passed over to the primary through it's corresponding connector
+- Added code to prevent trying to assign inCall or inPreview status on Primary when corresponding events come from a secondary with an IP that does not match any configured secondaries.
+- Added combine/split status to "High Triggered" console log messages to help troubleshooting since VuMeters are turned on even when codec is split.
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)
@@ -125,8 +131,7 @@ To trigger the automatic switching behavior between rooms when combined, either 
 
 If you turn off SpeakerTrack manually while in a call, the automatic switching will pause until you turn it back on again. During this time, you can select another camera in the codec, such as a PTZ camera focused on a Whiteboard, which will be used in the call and even when there is audio activity in the secondary room the macro will not switch to that camera until you turn speakertrack back on.
 
-During a call, you can use the Auto Q&A custom panel button to turn on PresenterTrack with our without the Q&A mode option. When in Presenter Track mode with with Q&A mode enabled, the macro will take care of keeping the focus on the presenter and if a question comes in from the audience from either room it will compose the image of the presenter plust the audience member while they are talking and a few seconds afterwards (controlled by the PRESENTER_QA_KEEP_COMPOSITION_TIME configurable constant in the macro)
-
+During a call, you can use the Auto Q&A custom panel button to turn on PresenterTrack with our without the Q&A mode option. When in Presenter Track mode with with Q&A mode enabled, the macro will take care of keeping the focus on the presenter and if a question comes in from the audience from either room it will compose the image of the presenter plus the audience member while they are talking and a few seconds afterwards (controlled by the PRESENTER_QA_KEEP_COMPOSITION_TIME configurable constant in the macro) it will focus back only on the presenter; this behavior is similar to the native "Classroom Mode" which is not compatible with this macro. If you select PresenterTrack without the Q&A mode option, the macro will make sure the presenter is always the one being shown in the call irrespective if anyone else in any of the rooms is speaking until you turn off PresenterTrack either via the custom panel or using the native camera controls of the codec.
 The macro works when used in combination with the USB Mode v3 macro. Please note that when in USB Mode, you cannot combine or split rooms until you exit out of that mode.
 
 NOTE: WebRTC support in RoomOS 10 (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
