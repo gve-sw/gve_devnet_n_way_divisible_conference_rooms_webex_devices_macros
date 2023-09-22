@@ -1,76 +1,10 @@
 # GVE DevNet N-Way Divisible Conference Rooms Webex Devices Macros
 
-Macros to automate dividing and combining conference rooms with Webex Codec Pro devices so that the same equipment can be used in both modes to join conference calls
+Macros to automate dividing and combining conference rooms with Webex Codec Pro and Webex Codec EQ devices so that the same equipment can be used in both modes to join conference calls. This Macro can be used for setups consisting of two rooms that can be combined into one large room, but also for more complex designs where there are up to four rooms that need to be combined or devided as long as they are contiguous and on of the rooms is designated the primary which always has to be part of any combination.
 
-3/21/23 Changes:
+Check the [Change Log](CHANGELOG.md) in this repository for the most recent changes and fixes to this macro.
 
-- Added validation for not changing macro name.
-- Added code to auto-generate preset 30 if not already configured. Still need to be modified manually to
-  show the right image since the code just completey zooms out QuadCam on connector 1 to save the preset.
-- Confirmation messages that secondary codecs are online or in calls now kept separate for each one to prevent
-  race conditions.
-- Added the divisible_room_ECS sample macro to easily add xAPI commands to drive an External Controller based on the
-  divisible macro events that are triggered so that code does not have to be embedded in the macro itself in multiple places.
-
-3/25/23 Changes:
-
-- Added ability to select of de-select secondary codecs in the Room Combine Control custom panel button so that only certain secondary rooms are included when combining rooms.
-
-4/20/23 Changes:
-
-- Removed dependency on GPIO custom cable for inter-codec communication with the secondaries
-- Added pin protection for the "Room Combine Control" custom panel
-
-5/23/23 Changes:
-
-- Added versioning (currently at version 2.1.2)
-- Updated installation instructions
-- Fixed issue with restoring speakertrack on primary room after exiting side-by-side view
-- changes to GMM connection object instantiation to improve reliability
-
-5/25/23 Changes (version 2.1.3):
-
-- Modified all calls to GMM library to send inter-codec messages to be asynchronous
-- Added keep alive mechanism between primary and secondaries
-
-5/31/23 Changes (version 2.1.4):
-
-- Added mechanism to adjust system volume when combined and split so you can hard code settings for each instead of just increasing and decreasing based on number of change steps.
-
-6/1/23 Changes (version 2.1.5):
-
-- Corrected code on Secondary that turns audio input on/off when combine/split from HDMI tie line from Primary specified in SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID instead of a hard coded value of connector 3
-- Stopped displaying a secondary to select in Room Combine Control custom panel when there is only one secondary configured since you cannot deselect it anyhow.
-
-6/5/23 Changes (version 2.1.6)
-
-- Corrected handling of storing to permanent storage display configuration while rooms are combined and macro restarts
-
-6/13/23 Changes (version 2.1.7)
-
-- Implemented more robust mechanism to select secondary codecs and receive confirmation that setting was propagated to target devices
-- Corrected situation where secondary in call was not being reported to primary if not using GPIO cable
-- Added console log warning when macro on secondary codec is not correctly named
-
-6/15/23 Changes (version 2.1.8)
-
-- Only hide Room Combine Control panel when primary codec is in a call, not when secondaries are since we still check for those not being in call before combining
-- Allow combine/split of selected rooms even if un-selected room is in a call.
-
-6/22/23 Changes (version 2.1.9)
-
-- Added an option for the use of the Monitor speakers on Secondary rooms (SECONDARY_USE_MONITOR_AUDIO) since before it was assumed they were not being used.
-- Fixed sending audio across tie line from Primary to Secondaries when using HDMI Out connector 2 for single-screen configurations that use Monitor connector 2 instead of splitter on connector 1.
-
-6/30/23 Changes (version 2.1.10)
-
-- Added handlers to detect presentation preview on primary and secondaries and now allow split/combine while presentation preview is active. Same for the primary codec. Behaves the same as when a codec is in a call: refusal to join/split and notification if secondary is in call or in presentation preview and if it is the Primary codec that is in those states, the "Room Combine Control" custom panel is hidden.
-
-8/3/23 Changes (version 2.1.11)
-
-- Added protections so that Primary never switches to a video input coming from a secondary when in standalone mode even if somehow the associated audio input has audio activity (output on secondary out line 5 should have been turned off when switching to standalone). Also for when Primary is in combined mode but audio from a non-selected secondary room is somehow passed over to the primary through it's corresponding connector
-- Added code to prevent trying to assign inCall or inPreview status on Primary when corresponding events come from a secondary with an IP that does not match any configured secondaries.
-- Added combine/split status to "High Triggered" console log messages to help troubleshooting since VuMeters are turned on even when codec is split.
+NOTE: Support for the Codec EQ has not yet been reflected in the system drawings as an option or mentioned in the Instalation Instructions, but the macro has been changed to accomodate the smaller number of connectros on that device. If you wish to use Codec EQ devices, they must have the AV Integrator Software Option Key installed.
 
 ## Contacts
 
@@ -119,7 +53,7 @@ Once you have installed divisible_room.js in both the Primary and Secondary code
 Detailed instructions on each settings in those sections are provided in the macro itself in the form
 of code comments.
 
-IMPORTANT: Turn on the divisible_room macro on the Primary codec before turning it on in Secondary to give the macro a chance to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage. Also, turn on only the divisible_room macro on each codec. DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.
+IMPORTANT: Turn on the divisible_room macro on the Primary codec before turning it on in Secondary to give the macro a chance to set up the correct Join/Split state according to what is reflected in permanent storage. Also, turn on only the divisible_room macro on each codec. DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.
 
 NOTE: Never change the Video Monitors, Ultrasound MaxVolume, WakeupOnMotionDetection or StandbyControl settings on the Secondary codec while in combined mode. These settings are stored when going from split to combined mode to restore once back in split mode so if you change them while combined the wrong settings could be stored away in persistent memory. The safest option is to set those on either codec only in split mode and while the macro is off.
 
@@ -135,7 +69,7 @@ During a call, you can use the Auto Q&A custom panel button to turn on Presenter
 The macro works when used in combination with the USB Mode v3 macro. Please note that when in USB Mode, you cannot combine or split rooms until you exit out of that mode.
 
 NOTE: WebRTC support in RoomOS 10 (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
-For RoomOS 11 Beta, there is full support for camera switching in WebRTC calls without the delays described above, but it still cannot compose two video inputs side by side in overview moder or in Presenter QA mode so in those situations the macro will just send one video input.
+For RoomOS 11 , there is full support for camera switching in WebRTC calls without the delays described above, but it still cannot compose two video inputs side by side in overview moder or in Presenter QA mode so in those situations the macro will just send one video input.
 
 Note: On RoomOS 11.2, make sure you are not showing any self-view screen on the secondary codec when combining , this includes not being in the "Control Panel" in the Navigator or Touch 10 device for the secondary even after going Standby manually because when it comes back out it will go to that screen showing the Control Panel on the control device and selfview on the main screen and this triggers an unstable state on the secondary codec.
 

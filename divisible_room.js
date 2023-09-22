@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.11
-* Released: August 3, 2023
-* Latest RoomOS version tested: 11.6.1.5
+* Version: 2.1.12
+* Released: September 21, 2023
+* Latest RoomOS version tested: 11.8.1.7
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -67,6 +67,7 @@ const JS_PRIMARY = 1, JS_SECONDARY = 2, JS_NONE = 0
 const JOIN_SPLIT_CONFIG = {
   ROOM_ROLE: JS_PRIMARY,
   SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID: 3, // change only for non-standard singe screen setups
+  SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID: 5, // change only if non standard (i.e. codec EQ)
   SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID: 3, // change only for non-standard singe screen setups
   SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID: 4, // change only for non-standard singe screen setups
   PRIMARY_CODEC_IP: '10.0.0.100'
@@ -310,6 +311,10 @@ const keepAliveReportOnlyFails = true;
 const KA_FREQUENCY_SECONDS = 15;
 const KA_CHECK_REPLIES_TIMEOUT_MS = 2000; // time in ms to check for KA replies no less than 1000
 
+async function isCodecPro() {
+  let ProductPlatform = await xapi.Status.SystemUnit.ProductPlatform.get()
+  return (ProductPlatform == "Codec Pro")
+}
 
 let secondariesKAStatus = {};
 function priHandleKeepAliveResponse(ipAddress) {
@@ -353,6 +358,27 @@ async function secSendKeepAliveResponse() {
 // Validate config settings
 async function validate_config() {
   let hasOverview = true;
+
+  // only allow CodecPro or CodecEQ with advanced AV integrator option key
+  const ProductPlatform = await xapi.Status.SystemUnit.ProductPlatform.get()
+  if (ProductPlatform == "Room Kit EQ") {
+    try {
+      console.log(`Is Codec EQ`);
+      const hasAVOptionInstalled = await xapi.Status.SystemUnit.Software.OptionKeys.AVIntegrator.get()
+      if (hasAVOptionInstalled != 'True') {
+        await disableMacro(`config validation fail: Platform ${ProductPlatform} without AV Integrator Option key not supported.`);
+      }
+    }
+    catch (e) {
+      await disableMacro(`config validation fail: Platform ${ProductPlatform} could not validate AV Option key.`);
+    }
+  }
+  else if (ProductPlatform == "Codec Pro") {
+    console.log(`Is Codec Pro`)
+  }
+  else {
+    await disableMacro(`config validation fail: Platform ${ProductPlatform} not supported.`);
+  }
 
   if (module.name.replace('./', '') != 'divisible_room')
     await disableMacro(`config validation fail: macro name has changed to: ${module.name.replace('./', '')}. Please set back to: divisible_room`);
@@ -551,7 +577,8 @@ async function init_intercodec() {
       let stored_setStatus = {}
       stored_setStatus = await GMM.read.global('JoinSplit_secondariesStatus').catch(async e => {
         console.log("No initial JoinSplit_secondariesStatus global detected, using constants in macro to create new one")
-        return false;
+        //return false; // TODO: this should return {}
+        return {}; // TODO: test this return method instead of return false
       })
       let codecIPArray = [];
 
@@ -797,13 +824,14 @@ async function storeSecondarySettings(ultraSoundMaxValue, wState, sState) {
 /**
   * This will initialize the room state to Combined or Divided based on the setting in Memory Macro (persistent storage)
 **/
-function initialCombinedJoinState() {
+async function initialCombinedJoinState() {
   // Change all these to whatever is needed to trigger on the Primary when it goes into combined
   if (roomCombined) {
     console.log('Primary Room is in Combined Mode');
     if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
       primaryCombinedMode();
-      if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow();
+      if (await isCodecPro())
+        if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow();
       if (!USE_WALL_SENSOR) {
         xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'On' });
       }
@@ -980,12 +1008,14 @@ async function setPrimaryDefaultConfig() {
 
   console.log("Primary default config being run");
 
-  xapi.config.set('Audio Input ARC 1 Mode', 'Off')
-    .catch((error) => { console.error("1" + error); });
-  xapi.config.set('Audio Input ARC 2 Mode', 'Off')
-    .catch((error) => { console.error("2" + error); });
-  xapi.config.set('Audio Input ARC 3 Mode', 'Off')
-    .catch((error) => { console.error("3" + error); });
+  if (await isCodecPro()) {
+    xapi.config.set('Audio Input ARC 1 Mode', 'Off')
+      .catch((error) => { console.error("1" + error); });
+    xapi.config.set('Audio Input ARC 2 Mode', 'Off')
+      .catch((error) => { console.error("2" + error); });
+    xapi.config.set('Audio Input ARC 3 Mode', 'Off')
+      .catch((error) => { console.error("3" + error); });
+  }
 
   // HDMI AUDIO SECTION
   xapi.config.set('Audio Input HDMI 1 Mode', 'Off')
@@ -996,27 +1026,26 @@ async function setPrimaryDefaultConfig() {
   // SET MICROPHONES
   // MICROPHONES 1 THRU 7 ARE USER CONFIGURABLE
 
-
-  //TODO: Review if I have to do the commands below when I have multiple secondaries coming in or if I can just set 
-  // without the macro affecting it
-
-  // MIC 8
-  // THIS IS THE INPUT FOR THE MICROPHONES FROM THE SECONDARY CODEC
-  xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
-    .catch((error) => { console.error("6" + error); });
-  xapi.config.set('Audio Input Microphone 8 EchoControl Dereverberation', 'Off')
-    .catch((error) => { console.error("7" + error); });
-  xapi.config.set('Audio Input Microphone 8 EchoControl Mode', 'On')
-    .catch((error) => { console.error("8" + error); });
-  xapi.config.set('Audio Input Microphone 8 EchoControl NoiseReduction', 'Off')
-    .catch((error) => { console.error("9" + error); });
-  xapi.config.set('Audio Input Microphone 8 Level', '18')
-    .catch((error) => { console.error("10" + error); });
-  xapi.config.set('Audio Input Microphone 8 Mode', 'Off')
-    .catch((error) => { console.error("11" + error); });
-  xapi.config.set('Audio Input Microphone 8 PhantomPower', 'Off')
-    .catch((error) => { console.error("12" + error); });
-
+  // Do inital configuration for inbound audio tielines 
+  config.compositions.forEach(compose => {
+    if (compose.source == JS_SECONDARY) {
+      compose.mics.forEach(async micId => {
+        // THIS IS THE INPUT FOR THE MICROPHONES FROM THE SECONDARY CODEC
+        if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Channel', 'Mono').catch((error) => { console.error("6" + error); });
+        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl Dereverberation', 'Off')
+          .catch((error) => { console.error("7" + error); });
+        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl Mode', 'On')
+          .catch((error) => { console.error("8" + error); });
+        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl NoiseReduction', 'Off')
+          .catch((error) => { console.error("9" + error); });
+        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Level', '18')
+          .catch((error) => { console.error("10" + error); });
+        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'Off')
+          .catch((error) => { console.error("11" + error); });
+        if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' PhantomPower', 'Off').catch((error) => { console.error("12" + error); });
+      })
+    }
+  })
   // MUTE
   xapi.config.set('Audio Microphones Mute Enabled', 'True')
     .catch((error) => { console.error("13" + error); });
@@ -1026,7 +1055,7 @@ async function setPrimaryDefaultConfig() {
 
 
   // HDMI AUDIO OUTPUT
-  xapi.Config.Audio.Output.ConnectorSetup.set('Manual');
+  if (await isCodecPro()) xapi.Config.Audio.Output.ConnectorSetup.set('Manual');
 
   xapi.config.set('Audio Output HDMI 1 Mode', 'On')
     .catch((error) => { console.error("15" + error); });
@@ -1043,18 +1072,23 @@ async function setPrimaryDefaultConfig() {
     .catch((error) => { console.error("31" + error); });
 
 
+
   // GPIO
-  xapi.config.set('GPIO Pin 1 Mode', 'InputNoAction')
-    .catch((error) => { console.error("33" + error); });
+  if (await isCodecPro()) {
+    if (USE_WALL_SENSOR) {
+      xapi.config.set('GPIO Pin 1 Mode', 'InputNoAction')
+        .catch((error) => { console.error("33" + error); });
+    }
 
-  xapi.config.set('GPIO Pin 2 Mode', 'OutputManualState')
-    .catch((error) => { console.error("34" + error); });
-  xapi.config.set('GPIO Pin 3 Mode', 'OutputManualState')
-    .catch((error) => { console.error("35" + error); });
-  xapi.config.set('GPIO Pin 4 Mode', 'OutputManualState')
-    .catch((error) => { console.error("36" + error); });
-
-
+    if (USE_GPIO_INTERCODEC) {
+      xapi.config.set('GPIO Pin 2 Mode', 'OutputManualState')
+        .catch((error) => { console.error("34" + error); });
+      xapi.config.set('GPIO Pin 3 Mode', 'OutputManualState')
+        .catch((error) => { console.error("35" + error); });
+      xapi.config.set('GPIO Pin 4 Mode', 'OutputManualState')
+        .catch((error) => { console.error("36" + error); });
+    }
+  }
   // PERIPHERALS
   xapi.config.set('Peripherals Profile Cameras', 'Minimum1')
     .catch((error) => { console.error("39" + error); });
@@ -1171,16 +1205,17 @@ async function setSecondaryDefaultConfig() {
    await storeSecondarySettings(ultraSoundMaxValue, standbyWakeupMotionValue, standbyControlValue);
   */
 
-  xapi.config.set('Audio Input ARC 1 Mode', 'Off')
-    .catch((error) => { console.error("1" + error); });
-  xapi.config.set('Audio Input ARC 2 Mode', 'Off')
-    .catch((error) => { console.error("2" + error); });
-  xapi.config.set('Audio Input ARC 3 Mode', 'Off')
-    .catch((error) => { console.error("3" + error); });
-
+  if (await isCodecPro()) {
+    xapi.config.set('Audio Input ARC 1 Mode', 'Off')
+      .catch((error) => { console.error("1" + error); });
+    xapi.config.set('Audio Input ARC 2 Mode', 'Off')
+      .catch((error) => { console.error("2" + error); });
+    xapi.config.set('Audio Input ARC 3 Mode', 'Off')
+      .catch((error) => { console.error("3" + error); });
+  }
 
   // HDMI AUDIO SECTION
-  xapi.Config.Audio.Output.ConnectorSetup.set('Manual');
+  if (await isCodecPro()) xapi.Config.Audio.Output.ConnectorSetup.set('Manual');
   xapi.config.set('Audio Input HDMI 1 Mode', 'Off')
     .catch((error) => { console.error("4" + error); });
   xapi.config.set('Audio Input HDMI 2 Mode', 'Off')
@@ -1218,15 +1253,18 @@ async function setSecondaryDefaultConfig() {
   xapi.config.set('Conference AutoAnswer Mode', 'Off')
     .catch((error) => { console.error("36" + error); });
 
-  // GPIO
-  xapi.config.set('GPIO Pin 2 Mode', 'InputNoAction')
-    .catch((error) => { console.error("39" + error); });
-  xapi.config.set('GPIO Pin 3 Mode', 'InputNoAction')
-    .catch((error) => { console.error("40" + error); });
-  xapi.config.set('GPIO Pin 4 Mode', 'InputNoAction')
-    .catch((error) => { console.error("41" + error); });
 
-
+  if (await isCodecPro()) {
+    // GPIO
+    if (USE_GPIO_INTERCODEC) {
+      xapi.config.set('GPIO Pin 2 Mode', 'InputNoAction')
+        .catch((error) => { console.error("39" + error); });
+      xapi.config.set('GPIO Pin 3 Mode', 'InputNoAction')
+        .catch((error) => { console.error("40" + error); });
+      xapi.config.set('GPIO Pin 4 Mode', 'InputNoAction')
+        .catch((error) => { console.error("41" + error); });
+    }
+  }
 
 
   // PERIPHERALS
@@ -1270,41 +1308,44 @@ async function setSecondaryDefaultConfig() {
   xapi.config.set('Video Input Connector 1 Visibility', 'Never')
     .catch((error) => { console.error("61" + error); });
 
-  // HDMI INPUTS 3 AND 4
+
+  // Usually HDMI INPUTS 3 AND 4
   // THESE ARE SCREENS 1 AND 2 FROM THE PRIMARY ROOM
-  xapi.config.set('Video Input Connector 3 HDCP Mode', 'Off')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' HDCP Mode', 'Off')
     .catch((error) => { console.error("62" + error); });
-  xapi.config.set('Video Input Connector 3 CameraControl Mode', 'Off')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' CameraControl Mode', 'Off')
     .catch((error) => { console.error("63" + error); });
-  xapi.config.set('Video Input Connector 3 InputSourceType', 'Other')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' InputSourceType', 'Other')
     .catch((error) => { console.error("64" + error); });
-  xapi.config.set('Video Input Connector 3 Name', 'Main Video Primary')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Name', 'Main Video Primary')
     .catch((error) => { console.error("65" + error); });
-  xapi.config.set('Video Input Connector 3 PreferredResolution', '3840_2160_30')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' PreferredResolution', '3840_2160_30')
     .catch((error) => { console.error("66" + error); });
-  xapi.config.set('Video Input Connector 3 PresentationSelection', 'Manual')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' PresentationSelection', 'Manual')
     .catch((error) => { console.error("67" + error); });
-  xapi.config.set('Video Input Connector 3 Quality', 'Sharpness')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Quality', 'Sharpness')
     .catch((error) => { console.error("68" + error); });
-  xapi.config.set('Video Input Connector 3 Visibility', 'Never')
+  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Visibility', 'Never')
     .catch((error) => { console.error("69" + error); });
 
-  xapi.config.set('Video Input Connector 4 HDCP Mode', 'Off')
-    .catch((error) => { console.error("70" + error); });
-  xapi.config.set('Video Input Connector 4 CameraControl Mode', 'Off')
-    .catch((error) => { console.error("71" + error); });
-  xapi.config.set('Video Input Connector 4 InputSourceType', 'PC')
-    .catch((error) => { console.error("72" + error); });
-  xapi.config.set('Video Input Connector 4 Name', 'Content Primary')
-    .catch((error) => { console.error("73" + error); });
-  xapi.config.set('Video Input Connector 4 PreferredResolution', '3840_2160_30')
-    .catch((error) => { console.error("74" + error); });
-  xapi.config.set('Video Input Connector 4 PresentationSelection', 'Manual')
-    .catch((error) => { console.error("75" + error); });
-  xapi.config.set('Video Input Connector 4 Quality', 'Sharpness')
-    .catch((error) => { console.error("76" + error); });
-  xapi.config.set('Video Input Connector 4 Visibility', 'Never')
-    .catch((error) => { console.error("77" + error); });
+  if (JoinSplit_secondary_settings.VideoMonitors == 'Dual' || JoinSplit_secondary_settings.VideoMonitors == 'DualPresentationOnly') {
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' HDCP Mode', 'Off')
+      .catch((error) => { console.error("70" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' CameraControl Mode', 'Off')
+      .catch((error) => { console.error("71" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' InputSourceType', 'PC')
+      .catch((error) => { console.error("72" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Name', 'Content Primary')
+      .catch((error) => { console.error("73" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' PreferredResolution', '3840_2160_30')
+      .catch((error) => { console.error("74" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' PresentationSelection', 'Manual')
+      .catch((error) => { console.error("75" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Quality', 'Sharpness')
+      .catch((error) => { console.error("76" + error); });
+    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Visibility', 'Never')
+      .catch((error) => { console.error("77" + error); });
+  }
 
   // HDMI INPUT 2 (PRESENTER CAMERA) and 5 SHOULD BE CONFIGURED FROM THE WEB INTERFACE
   // SDI INPUT 6 SHOULD ALSO BE CONFIGURED FROM THE WEB INTERFACE
@@ -2790,14 +2831,14 @@ async function init() {
     initialCombinedJoinState();
 
     // start listening to events on GPIO pin 1 that come from the wall sensor connected to PRIMARY
-    primaryInitPartitionSensor();
+    if (USE_WALL_SENSOR) primaryInitPartitionSensor();
 
     //setTimeout(setPrimaryGPIOconfig, 1000);
     //primaryStandaloneMode();
 
     // start sensing changes in PIN 4 to switch room modes. This can be set by wall sensor
     // or custom touch10 UI on PRIMARY codec
-    primaryInitModeChangeSensing();
+    if (USE_GPIO_INTERCODEC) primaryInitModeChangeSensing();
 
     primaryListenToStandby();
     primaryListenToMute();
@@ -3312,8 +3353,20 @@ function secondaryMuteControl() {
 async function primaryCombinedMode() {
   handleExternalController('PRIMARY_COMBINE');
 
-  xapi.config.set('Audio Input Microphone 8 Mode', 'On')
-    .catch((error) => { console.error(error); });
+  //Only turn on mics for selected secondaries
+  config.compositions.forEach(compose => {
+    if (compose.source == JS_SECONDARY) {
+      if (compose.codecIP in secondariesStatus)
+        if (secondariesStatus[compose.codecIP].selected)
+          compose.mics.forEach(micId => {
+            // THIS IS THE INPUT FOR THE MICROPHONES FROM THE SECONDARY CODEC
+            xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'On')
+              .catch((error) => { console.error(error); });
+          })
+    }
+  })
+
+
   xapi.config.set('Conference FarEndControl Mode', 'Off')
     .catch((error) => { console.error("32" + error); });
 
@@ -3350,8 +3403,16 @@ async function primaryStandaloneMode() {
 
   handleExternalController('PRIMARY_SPLIT');
 
-  xapi.config.set('Audio Input Microphone 8 Mode', 'Off')
-    .catch((error) => { console.error(error); });
+  config.compositions.forEach(compose => {
+    if (compose.source == JS_SECONDARY) {
+      compose.mics.forEach(micId => {
+        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'Off')
+          .catch((error) => { console.error(error); });
+      })
+    }
+  })
+
+
   xapi.config.set('Conference FarEndControl Mode', 'On')
     .catch((error) => { console.error("32" + error); });
 
@@ -3387,7 +3448,7 @@ async function secondaryStandaloneMode() {
   await delay(2000); // give some time to get out of standby
 
   handleExternalController('SECONDARY_SPLIT');
-  xapi.config.set('Audio Output Line 5 Mode', 'Off')
+  xapi.config.set('Audio Output Line ' + JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'Off')
     .catch((error) => { console.error(error); });
   //xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
   // .catch((error) => { console.error("5" + error); });
@@ -3464,8 +3525,7 @@ async function secondaryCombinedMode() {
   if (!isOSEleven)
     xapi.config.set('UserInterface OSD Mode', 'Unobstructed')
       .catch((error) => { console.error("91" + error); });
-  xapi.config.set('Audio Output Line 5 Mode', 'On')
-    .catch((error) => { console.error(error); });
+  xapi.config.set('Audio Output Line ' + JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'On').catch((error) => { console.error(error); });
 
   //xapi.config.set('Audio Input HDMI 3 Mode', 'On')
   //.catch((error) => { console.error("5" + error); });
