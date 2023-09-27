@@ -72,3 +72,10 @@
 
 - Added support for Codec EQ
 - Added validation to stop running on any platform that is not Codec Pro or Codec EQ
+
+9/25/23 Changes (version 2.1.13)
+
+- Added support for multiple combined room configurations for Presentertrack trigger zones to accomodate setups with more than one secondary room.
+- Added support for auto-trigger of presenterTrack so that you can keep it on from the custom  
+  panel button (including QA mode) and have it stop tracking once you leave the stage and re-acquire  
+  when you return to it.

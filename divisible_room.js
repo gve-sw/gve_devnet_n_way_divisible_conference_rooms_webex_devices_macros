@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.12
-* Released: September 21, 2023
+* Version: 2.1.13
+* Released: September 26, 2023
 * Latest RoomOS version tested: 11.8.1.7
 *
 * Macro Author:      	Gerardo Chaves
@@ -103,7 +103,7 @@ const COMBINE_CONTROL_PIN = "9999"
 // GPIO pins 2-4 between the primary codec and secondary codecs. This cable cannot be used if you have 
 // a setup where you need to "promote" a secondary room to primary to accomodate specific room layouts
 // in which case the value should be false.
-const USE_GPIO_INTERCODEC = true;
+const USE_GPIO_INTERCODEC = false;
 
 // USE_WALL_SENSOR controls if you use a physical wall sensor or not
 // If set to false, you will get a custom panel to manually switch rooms from join to split
@@ -136,12 +136,47 @@ const SPLIT_PRESENTERTRACK_SETTINGS = {
   ZOOM: 4104,
   TRIGGERZONE: '0,95,400,850'
 } //Replace these placeholder values with your actual values.
-const COMBINED_PRESENTERTRACK_SETTINGS = {
-  PAN: -1378,
-  TILT: -309,
-  ZOOM: 4104,
-  TRIGGERZONE: '0,89,549,898'
-} //Replace these placeholder values with your actual values.
+
+// Each key in the N_COMBINED_PRESENTERTRACK_SETTINGS object refers to the
+// name of compositions associated to the secondary rooms selected (separated by ':' ), in addition
+// to the primary room,  when combining rooms for which you wish to use the set 
+// of values for presenter track reflected in the value of the entry. 
+// For example, entry with key 'RoomSecondaryRight' will be used when the primary room
+// plus the secondary codec associated to the RoomSecondaryRight are combined, and 
+// entry with key 'RoomSecondaryLeft:RoomSecondaryRight' will be used when the primary room
+// plus the secondary codecs associated to both the RoomSecondaryRight and RoomSecondaryRight are combined
+// into a 3 way combined room 
+const N_COMBINED_PRESENTERTRACK_SETTINGS = {
+  'RoomSecondaryRight':
+  {
+    PAN: -1378,
+    TILT: -309,
+    ZOOM: 4104,
+    TRIGGERZONE: '0,89,549,898'
+  },
+  'RoomSecondaryLeft':
+  {
+    PAN: -1378,
+    TILT: -309,
+    ZOOM: 4104,
+    TRIGGERZONE: '0,89,549,898'
+  },
+  'RoomSecondaryLeft:RoomSecondaryRight':
+  {
+    PAN: -1378,
+    TILT: -309,
+    ZOOM: 4104,
+    TRIGGERZONE: '0,89,549,898'
+  },
+  'RoomSecondaryLeft:RoomSecondaryRight:RoomSecondaryFarRight':
+  {
+    PAN: -1378,
+    TILT: -309,
+    ZOOM: 4104,
+    TRIGGERZONE: '0,89,549,898'
+  }
+}  //Replace these placeholder values with your actual values.
+
 
 
 // CHK_VUMETER_LOUDSPEAKER specifies if we check the LoudspeakerActivity flag from the VuMeter events
@@ -678,6 +713,7 @@ let overviewShowDouble = false;
 let inSideBySide = false;
 
 let presenterTracking = false;
+let presenterDetected = true;
 let presenterTrackConfigured = false;
 let presenterQAKeepComposition = false;
 let qaCompositionTimer = null;
@@ -1578,7 +1614,7 @@ async function makeCameraSwitch(input, average) {
 
 
 
-  if (presenterTracking) {
+  if (presenterTracking && presenterDetected) {
     // if we have selected Presenter Q&A mode and the codec is currently in presenterTrack mode, invoke
     // that specific camera switching logic contained in presenterQASwitch()
     if (PRESENTER_QA_MODE && !webrtc_mode) presenterQASwitch(input, sourceDict);
@@ -1722,7 +1758,7 @@ async function recallSideBySideMode() {
     if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
     // only invoke SideBySideMode if not in presenter QA mode and not presentertrack is currently not active
     // because Presenter QA mode has it's own way of composing side by side. 
-    if (presenterTracking) {
+    if (presenterTracking && presenterDetected) {
       // If in PRESENTER_QA_MODE mode and we go to silence, we need to restart the composition timer
       // to remove composition (if it was there) only after the configured time has passed.
       if (PRESENTER_QA_MODE && !webrtc_mode) restartCompositionTimer();
@@ -2355,7 +2391,7 @@ function restartCompositionTimer() {
 
 function onCompositionTimerExpired() {
   presenterQAKeepComposition = false;
-  if (PRESENTER_QA_MODE && !webrtc_mode && presenterTracking) {
+  if (PRESENTER_QA_MODE && !webrtc_mode && (presenterTracking && presenterDetected)) {
     if (!PRESENTER_QA_AUDIENCE_MIC_IDS.includes(lastActiveHighInput)) {
       // restore single presentertrackview because the person still speaking
       // is not an audience member and the timer has expired (could also be due to silence)
@@ -2656,6 +2692,27 @@ async function init_switching() {
   // register to receive events when someone manually turns on speakertrack
   xapi.Status.Cameras.SpeakerTrack.Status.on(evalSpeakerTrack);
 
+  // register to receive Presenter Detected events when in PresenterTrack mode.
+  // This way we can disable logic for presentertracking if the presenter steps away
+  // from stage and re-engage once they come back. 
+  xapi.Status.Cameras.PresenterTrack.PresenterDetected.on(async value => {
+    console.log('Received PT Presenter Detected as: ', value)
+    if (value == 'True') {
+      presenterDetected = true;
+      let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+      let connectorDict = { ConnectorId: presenterSource };
+      console.log("In PresenterDetected handler switching to input with SetMainVideoSource with dict: ", connectorDict)
+      xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+      lastSourceDict = connectorDict;
+
+    } else {
+      presenterDetected = false;
+      presenterQAKeepComposition = false;
+      lastSourceDict = { SourceID: '0' }; // forcing a camera switch
+
+    }
+  });
+
 
   // register to keep track of when PresenterTrack is active or not
   xapi.Status.Cameras.PresenterTrack.Status.on(value => {
@@ -2663,6 +2720,7 @@ async function init_switching() {
     lastSourceDict = { SourceID: '0' }; // forcing a camera switch
     if (value === 'Follow' || value === 'Persistent') {
       presenterTracking = true;
+      onInitialCallTimerExpired(); // need to clear out InitialCallTimer condition
       if (PRESENTER_QA_MODE && !webrtc_mode) {
         //showPTPanelButton();
         //recallFullPresenter();
@@ -3349,6 +3407,7 @@ function secondaryMuteControl() {
 /////////////////////////////////////////////////////////////////////////////////////////
 // SWITCH BETWEEN COMBINED AND STANDALONE
 /////////////////////////////////////////////////////////////////////////////////////////
+const areSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 
 async function primaryCombinedMode() {
   handleExternalController('PRIMARY_COMBINE');
@@ -3377,14 +3436,35 @@ async function primaryCombinedMode() {
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); });
 
   if (USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
-    xapi.Config.Cameras.PresenterTrack.CameraPosition.Pan
-      .set(COMBINED_PRESENTERTRACK_SETTINGS.PAN);
-    xapi.Config.Cameras.PresenterTrack.CameraPosition.Tilt
-      .set(COMBINED_PRESENTERTRACK_SETTINGS.TILT);
-    xapi.Config.Cameras.PresenterTrack.CameraPosition.Zoom
-      .set(COMBINED_PRESENTERTRACK_SETTINGS.ZOOM);
-    xapi.Config.Cameras.PresenterTrack.TriggerZone
-      .set(COMBINED_PRESENTERTRACK_SETTINGS.TRIGGERZONE);
+
+    let secondariesSelected = new Set();
+    config.compositions.forEach(compose => {
+      if (compose.source == JS_SECONDARY) {
+        if (secondariesStatus[compose.codecIP].selected) {
+          secondariesSelected.add(compose.name)
+        }
+      }
+    })
+
+    let combinedPTSettings = {}
+    Object.entries(N_COMBINED_PRESENTERTRACK_SETTINGS).forEach(([key, ptCameraSettings]) => {
+      let compNamesSet = new Set();
+      let myArray = key.split(':')
+      myArray.forEach(elem => { compNamesSet.add(elem) })
+      if (areSetsEqual(compNamesSet, secondariesSelected))
+        combinedPTSettings = JSON.parse(JSON.stringify(ptCameraSettings));
+    })
+
+    if (Object.keys(combinedPTSettings).length != 0) {
+      xapi.Config.Cameras.PresenterTrack.CameraPosition.Pan
+        .set(combinedPTSettings.PAN);
+      xapi.Config.Cameras.PresenterTrack.CameraPosition.Tilt
+        .set(combinedPTSettings.TILT);
+      xapi.Config.Cameras.PresenterTrack.CameraPosition.Zoom
+        .set(combinedPTSettings.ZOOM);
+      xapi.Config.Cameras.PresenterTrack.TriggerZone
+        .set(combinedPTSettings.TRIGGERZONE);
+    }
   }
 
 
