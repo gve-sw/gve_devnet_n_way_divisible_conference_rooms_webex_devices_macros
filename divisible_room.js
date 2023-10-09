@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.13
-* Released: September 26, 2023
+* Version: 2.1.14
+* Released: October 9, 2023
 * Latest RoomOS version tested: 11.8.1.7
 *
 * Macro Author:      	Gerardo Chaves
@@ -192,6 +192,11 @@ const CHK_VUMETER_LOUDSPEAKER = false;
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
+// To set the volume of the primary codecs to a specific value when combined vs when standalone, set the
+// the PRIMARY_COMBINED_VOLUME_COMBINED and PRIMARY_COMBINED_VOLUME_STANDALONE constants
+// if you leave them with value 0 they will be ignored
+const PRIMARY_COMBINED_VOLUME_COMBINED = 0
+const PRIMARY_COMBINED_VOLUME_STANDALONE = 0
 
 // Change SECONDARY_COMBINED_VOLUME_CHANGE_STEPS if you want to adjust the volume on the secondary
 // codec when switching modes. Each step is equivalent to a 0.5 dB change. Set the value to 0 if you wish
@@ -221,6 +226,8 @@ NOTE: See section 6 for PresenterTrack QA mode configuration and the PRESENTER_Q
 
 const config = {
   monitorMics: [1, 2, 3, 4, 5, 6, 7, 8], // input connectors associated to the microphones being used in the primary or secondary room
+  ethernetMics: [11, 12, 13, 14], // IDs associated to Ethernet mics: e.j. 12 is Ethernet Mic 1, sub-ID 2. USE ONLY FOR JS_PRIMARY SOURCE COMPOSITIONS
+  usbMics: [101], // Mic input connectors associated to the USB microphones being used in the main codec: 101 is USB Mic 1
   compositions: [     // Create your array of compositions, NOT NEEDED IF YOU ARE CONFIGURING A SECONDARY CODEC 
     {
       name: 'RoomMain',     // Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
@@ -234,7 +241,7 @@ const config = {
     {
       name: 'RoomSecondaryRight', //Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
       codecIP: '10.0.0.100',
-      mics: [8],
+      mics: [8], // ANALOG MICS ONLY IF FOR JS_SECONDARY SOURCE
       connectors: [2],
       source: JS_SECONDARY,
       layout: 'Prominent',       // Layout to use
@@ -243,7 +250,7 @@ const config = {
     {
       name: 'RoomSecondaryLeft', // Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
       codecIP: '10.0.0.110',
-      mics: [7],
+      mics: [7], // ANALOG MICS ONLY IF FOR JS_SECONDARY SOURCE
       connectors: [3],
       source: JS_SECONDARY,
       layout: 'Prominent',       // Layout to use
@@ -420,24 +427,71 @@ async function validate_config() {
 
   if (OTHER_CODEC_USERNAME == '')
     await disableMacro(`config validation fail: OTHER_CODEC credentials must be set.  Current values: OTHER_CODEC_USERNAME: ${OTHER_CODEC_USERNAME} OTHER_CODEC_PASSWORD= ${OTHER_CODEC_PASSWORD}`);
-
+  // allow up to 8 analog mics
   let allowedMics = [1, 2, 3, 4, 5, 6, 7, 8];
-  // only allow up to 8 microphones
-  if (config.monitorMics.length > 8 || config.monitorMics.length < 1)
-    await disableMacro(`config validation fail: config.monitorMics can only have between 1 and 8 entries. Current value: ${config.MonitorMics} `);
+
+  let allowedEthernetMics = []
+  // allow up to 8 ethernet mics with 8 lobes each
+  for (let i = 1; i <= 8; i++) {
+    for (let j = 1; j <= 8; j++) {
+      allowedEthernetMics.push((i * 10) + j)
+    }
+  }
+
+  let allowedUSBMics = []
+  // allow up to 4 USB mics
+  for (let i = 1; i <= 4; i++) {
+    allowedUSBMics.push(100 + i)
+  }
+
+
+  // only allow up to 8 analog microphones
+  if (config.monitorMics.length > 8)
+    await disableMacro(`config validation fail: config.monitorMics can only have up to 8 entries. Current value: ${config.MonitorMics} `);
+  // only allow up to 8 analog microphones
+  if (config.ethernetMics.length > 64)
+    await disableMacro(`config validation fail: config.ethernetMics can only have up to 64 entries. Current value: ${config.ethernetMics} `);
+  // only allow up to 8 analog microphones
+  if (config.usbMics.length > 4)
+    await disableMacro(`config validation fail: config.usbMics can only have up to 4 entries. Current value: ${config.usbMics} `);
+
+  if ((config.monitorMics.length + config.ethernetMics + config.usbMics.length) < 1)
+    await disableMacro(`config validation fail: there must be at least one microphone configured between config.monitorMics, config.ethernetMics and config.usbMics.`);
+
+
+  // Check if using USB mic/input, that Echo control is turned on
+  if (config.usbMics.length > 0) {
+    const usbEchoControl = await xapi.Config.Audio.Input.USBInterface[1].EchoControl.Mode.get()
+    if (usbEchoControl != 'On')
+      await disableMacro(`config validation fail: when using USB microphone input, Echo Control needs to be enabled. Only asynchronous USB devices are supported. Please enable and re-activate macro`);
+
+  }
 
   // make sure the mics are within those specified in the monitorMics array
   if (!config.monitorMics.every(r => allowedMics.includes(r)))
-    await disableMacro(`config validation fail: config.monitorMics can only have mic ids 1-8. Current value: ${config.monitorMics} `);
+    await disableMacro(`config validation fail: config.monitorMics can only have analog mic ids 1-8. Current value: ${config.monitorMics} `);
+
+  if (!config.ethernetMics.every(r => allowedEthernetMics.includes(r)))
+    await disableMacro(`config validation fail: config.ethernetMics can only include Ethernet mics 1-8(8 lobes each). Current value: ${config.ethernetMics} `);
+
+  if (!config.usbMics.every(r => allowedUSBMics.includes(r)))
+    await disableMacro(`config validation fail: config.usbMics can only include USB mics 1-4 (values 101-104). Current value: ${config.usbMics} `);
+
 
   // check for duplicates in config.monitorMics
   if (new Set(config.monitorMics).size !== config.monitorMics.length)
     await disableMacro(`config validation fail: config.monitorMics cannot have duplicates. Current value: ${config.monitorMics} `);
+  if (new Set(config.ethernetMics).size !== config.ethernetMics.length)
+    await disableMacro(`config validation fail: config.ethernetMics cannot have duplicates. Current value: ${config.ethernetMics} `);
+  if (new Set(config.usbMics).size !== config.usbMics.length)
+    await disableMacro(`config validation fail: config.usbMics cannot have duplicates. Current value: ${config.usbMics} `);
 
-  // Check for falid audience mics configured for the Presenter QA Mode feature
+  // Check for valid audience mics configured for the Presenter QA Mode feature
   if (ALLOW_PRESENTER_QA_MODE)
-    if (!PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.monitorMics.includes(r)))
-      await disableMacro(`config validation fail: PRESENTER_QA_AUDIENCE_MIC_IDS can only specify values contained in config.monitorMics . Current values config.monitorMics: ${config.monitorMics} PRESENTER_QA_AUDIENCE_MIC_IDS: ${PRESENTER_QA_AUDIENCE_MIC_IDS}`);
+    if (!PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.monitorMics.includes(r)) &&
+      !PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.ethernetMics.includes(r)) &&
+      !PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.usbMics.includes(r)))
+      await disableMacro(`config validation fail: PRESENTER_QA_AUDIENCE_MIC_IDS can only specify values contained in config.monitorMics, config.ethernetMics or config.usbMics . Current values PRESENTER_QA_AUDIENCE_MIC_IDS: ${PRESENTER_QA_AUDIENCE_MIC_IDS}`);
 
   // if running in secondary codec make sure we have a valid IP address for the primary codec
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY) {
@@ -448,7 +502,9 @@ async function validate_config() {
   else {
     hasOverview = false;
     // add value 0 to allowedMics array to include overview composition
-    allowedMics = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    allowedMics.push(0)
+    // consolidate all allowed mics to check each composition for valid mics.
+    allowedMics = allowedMics.concat(allowedEthernetMics, allowedUSBMics)
     // now let's check each composition
     for (let i = 0; i < config.compositions.length; i++) {
       let compose = config.compositions[i];
@@ -459,6 +515,12 @@ async function validate_config() {
       if (compose.source == JS_SECONDARY)
         if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(compose.codecIP))
           await disableMacro(`config validation fail: Invalid IP address for composition ${compose.name}: ${compose.codecIP} `);
+
+
+      // make sure if JS_SECONDARY source, mics specified are only analog mics being monitored
+      if (compose.source == JS_SECONDARY)
+        if (!compose.mics.every(r => config.monitorMics.includes(r)))
+          await disableMacro(`config validation fail: Invalid mics in composition ${compose.name}: ${compose.mics}. Only analog mics allowed for tie lines from secondaries`);
 
       // only allow up to 8 mics and at least 1 specified for each composition
       if (compose.mics.length > 8 || compose.mics.length < 1)
@@ -694,6 +756,12 @@ let micArrays = {};
 for (var i in config.monitorMics) {
   micArrays[config.monitorMics[i].toString()] = [0, 0, 0, 0];
 }
+for (var i in config.ethernetMics) {
+  micArrays[config.ethernetMics[i].toString()] = [0, 0, 0, 0];
+}
+for (var i in config.usbMics) {
+  micArrays[config.usbMics[i].toString()] = [0, 0, 0, 0];
+}
 let lowWasRecalled = false;
 let lastActiveHighInput = 0;
 let lastSourceDict = { SourceID: '1' }
@@ -708,6 +776,8 @@ let manual_mode = true;
 let primarySingleScreen = false;
 
 let micHandler = () => void 0;
+let micHandlerEthernet = () => void 0;
+let micHandlerUSB = () => void 0;
 
 let overviewShowDouble = false;
 let inSideBySide = false;
@@ -1080,6 +1150,11 @@ async function setPrimaryDefaultConfig() {
           .catch((error) => { console.error("11" + error); });
         if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' PhantomPower', 'Off').catch((error) => { console.error("12" + error); });
       })
+      compose.connectors.forEach(connectorId => {
+        xapi.config.set('Audio Input HDMI ' + connectorId.toString() + ' Mode', 'Off')
+          .catch((error) => { console.error("12" + error); });
+      })
+
     }
   })
   // MUTE
@@ -1256,8 +1331,7 @@ async function setSecondaryDefaultConfig() {
     .catch((error) => { console.error("4" + error); });
   xapi.config.set('Audio Input HDMI 2 Mode', 'Off')
     .catch((error) => { console.error("5" + error); });
-  //xapi.config.set('Audio Input HDMI 3 Mode', 'On')
-  //.catch((error) => { console.error("5" + error); });
+
   xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
     .catch((error) => { console.error("5" + error); });;
 
@@ -1444,6 +1518,11 @@ async function startAutomation() {
 
   if (isOSEleven) {
     xapi.Config.Cameras.SpeakerTrack.DefaultBehavior.set(ST_DEFAULT_BEHAVIOR);
+    if (ST_DEFAULT_BEHAVIOR == 'Frames') xapi.Command.Cameras.SpeakerTrack.Frames.Activate();
+    else {
+      xapi.Command.Cameras.SpeakerTrack.Frames.Deactivate();
+      if (ST_DEFAULT_BEHAVIOR == 'Closeup') xapi.Config.Cameras.SpeakerTrack.Closeup.set('On');
+    }
   }
 
   // Always turn on SpeakerTrack when the Automation is started. It is also turned on when a call connects so that
@@ -1454,22 +1533,68 @@ async function startAutomation() {
   } else xapi.Command.Cameras.SpeakerTrack.Activate().catch(handleError);
 
 
-  //registering vuMeter event handler
-  micHandler();
-  micHandler = () => void 0;
-  micHandler = xapi.event.on('Audio Input Connectors Microphone', (event) => {
-    if (typeof micArrays[event.id[0]] != 'undefined' && (!CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
-      micArrays[event.id[0]].shift();
-      micArrays[event.id[0]].push(event.VuMeter);
+  //registering vuMeter event handler for analog mics
+  if (config.monitorMics.length > 0) {
+    micHandler();
+    micHandler = () => void 0;
+    micHandler = xapi.event.on('Audio Input Connectors Microphone', (event) => {
+      if (typeof micArrays[event.id[0]] != 'undefined' && (!CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
+        micArrays[event.id[0]].shift();
+        micArrays[event.id[0]].push(event.VuMeter);
 
-      // checking on manual_mode might be unnecessary because in manual mode,
-      // audio events should not be triggered
-      if (manual_mode == false) {
-        // invoke main logic to check mic levels ans switch to correct camera input
-        checkMicLevelsToSwitchCamera();
+        // checking on manual_mode might be unnecessary because in manual mode,
+        // audio events should not be triggered
+        if (manual_mode == false) {
+          // invoke main logic to check mic levels ans switch to correct camera input
+          checkMicLevelsToSwitchCamera();
+        }
       }
-    }
-  });
+    });
+  }
+
+
+  //registering vuMeter event handler for Ethernet mics
+  if (config.ethernetMics.length > 0) {
+    micHandlerEthernet();
+    micHandlerEthernet = () => void 0;
+    micHandlerEthernet = xapi.event.on('Audio Input Connectors Ethernet', (event) => {
+      //console.log(event)
+      event.SubId.forEach(submic => {
+        if (typeof micArrays[event.id + submic.id] != 'undefined') {
+          micArrays[event.id + submic.id].shift();
+          micArrays[event.id + submic.id].push(submic.VuMeter);
+          if (manual_mode == false) {
+            // invoke main logic to check mic levels ans switch to correct camera input
+            checkMicLevelsToSwitchCamera();
+          }
+        }
+      })
+
+    });
+  }
+
+
+  //registering vuMeter event handler for USB mics
+  if (config.usbMics.length > 0) {
+    micHandlerUSB();
+    micHandlerUSB = () => void 0;
+    micHandlerUSB = xapi.event.on('Audio Input Connectors USBMicrophone', (event) => {
+      //console.log(event)
+      if (typeof micArrays['10' + event.id] != 'undefined') {
+        micArrays['10' + event.id].shift();
+        micArrays['10' + event.id].push(event.VuMeter);
+
+        // checking on manual_mode might be unnecessary because in manual mode,
+        // audio events should not be triggered
+        if (manual_mode == false) {
+          // invoke main logic to check mic levels ans switch to correct camera input
+          checkMicLevelsToSwitchCamera();
+        }
+      }
+    });
+  }
+
+
   // start VuMeter monitoring
   console.log("Turning on VuMeter monitoring...")
   for (var i in config.monitorMics) {
@@ -1480,6 +1605,35 @@ async function startAutomation() {
       Source: 'AfterAEC'
     });
   }
+
+
+  let ethernetMicsStarted = [];
+  for (var i in config.ethernetMics) {
+    if (!ethernetMicsStarted.includes(parseInt(config.ethernetMics[i] / 10))) {
+      ethernetMicsStarted.push(parseInt(config.ethernetMics[i] / 10));
+      xapi.Command.Audio.VuMeter.Start(
+        {
+          ConnectorId: parseInt(config.ethernetMics[i] / 10),
+          ConnectorType: 'Ethernet',
+          IncludePairingQuality: 'Off',
+          IntervalMs: 500,
+          Source: 'AfterAEC'
+        });
+    }
+  }
+
+
+  for (var i in config.usbMics) {
+    xapi.Command.Audio.VuMeter.Start(
+      {
+        ConnectorId: config.usbMics[i] - 100,
+        ConnectorType: 'USBMicrophone',
+        IncludePairingQuality: 'Off',
+        IntervalMs: 500,
+        Source: 'AfterAEC'
+      });
+  }
+
 }
 
 function stopAutomation() {
@@ -1511,6 +1665,10 @@ function stopAutomation() {
   // using proper way to de-register handlers
   micHandler();
   micHandler = () => void 0;
+  micHandlerEthernet();
+  micHandlerEthernet = () => void 0;
+  micHandlerUSB();
+  micHandlerUSB = () => void 0;
 }
 
 
@@ -1733,6 +1891,7 @@ function largestMicValue() {
   let currentMaxValue = 0;
   let currentMaxKey = '';
   let theAverage = 0;
+
   for (var i in config.monitorMics) {
     theAverage = averageArray(micArrays[config.monitorMics[i].toString()]);
     if (theAverage >= currentMaxValue) {
@@ -1740,6 +1899,23 @@ function largestMicValue() {
       currentMaxValue = theAverage;
     }
   }
+
+  for (var i in config.ethernetMics) {
+    theAverage = averageArray(micArrays[config.ethernetMics[i].toString()]);
+    if (theAverage >= currentMaxValue) {
+      currentMaxKey = config.ethernetMics[i].toString();
+      currentMaxValue = theAverage;
+    }
+  }
+
+  for (var i in config.usbMics) {
+    theAverage = averageArray(micArrays[config.usbMics[i].toString()]);
+    if (theAverage >= currentMaxValue) {
+      currentMaxKey = config.usbMics[i].toString();
+      currentMaxValue = theAverage;
+    }
+  }
+
   return currentMaxKey;
 }
 
@@ -3412,6 +3588,9 @@ const areSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(
 async function primaryCombinedMode() {
   handleExternalController('PRIMARY_COMBINE');
 
+  if (PRIMARY_COMBINED_VOLUME_COMBINED != 0) xapi.Command.Audio.Volume.Set({ Level: PRIMARY_COMBINED_VOLUME_COMBINED });
+
+
   //Only turn on mics for selected secondaries
   config.compositions.forEach(compose => {
     if (compose.source == JS_SECONDARY) {
@@ -3483,6 +3662,8 @@ async function primaryStandaloneMode() {
 
   handleExternalController('PRIMARY_SPLIT');
 
+  if (PRIMARY_COMBINED_VOLUME_STANDALONE != 0) xapi.Command.Audio.Volume.Set({ Level: PRIMARY_COMBINED_VOLUME_STANDALONE });
+
   config.compositions.forEach(compose => {
     if (compose.source == JS_SECONDARY) {
       compose.mics.forEach(micId => {
@@ -3530,8 +3711,7 @@ async function secondaryStandaloneMode() {
   handleExternalController('SECONDARY_SPLIT');
   xapi.config.set('Audio Output Line ' + JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'Off')
     .catch((error) => { console.error(error); });
-  //xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
-  // .catch((error) => { console.error("5" + error); });
+
   xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('Off')
     .catch((error) => { console.error("5" + error); });;
 
@@ -3607,8 +3787,6 @@ async function secondaryCombinedMode() {
       .catch((error) => { console.error("91" + error); });
   xapi.config.set('Audio Output Line ' + JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'On').catch((error) => { console.error(error); });
 
-  //xapi.config.set('Audio Input HDMI 3 Mode', 'On')
-  //.catch((error) => { console.error("5" + error); });
   xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
     .catch((error) => { console.error("5" + error); });
 

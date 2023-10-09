@@ -2,6 +2,10 @@
 
 Macros to automate dividing and combining conference rooms with Webex Codec Pro and Webex Codec EQ devices so that the same equipment can be used in both modes to join conference calls. This Macro can be used for setups consisting of two rooms that can be combined into one large room, but also for more complex designs where there are up to four rooms that need to be combined or devided as long as they are contiguous and on of the rooms is designated the primary which always has to be part of any combination.
 
+| RoomOs Minimum Version | Webex Cloud | Webex Edge (Hybrid Cloud) | On-Premise | Microsoft Teams Room On Cisco Devices |
+| ---------------------- | ----------- | ------------------------- | ---------- | ------------------------------------- |
+| 10.17.1.0              | Yes         | Yes                       | Yes        | No - API Limitation                   |
+
 Check the [Change Log](CHANGELOG.md) in this repository for the most recent changes and fixes to this macro.
 
 NOTE: Support for the Codec EQ has not yet been reflected in the system drawings as an option or mentioned in the Instalation Instructions, but the macro has been changed to accomodate the smaller number of connectros on that device. If you wish to use Codec EQ devices, they must have the AV Integrator Software Option Key installed.
@@ -20,7 +24,7 @@ NOTE: Support for the Codec EQ has not yet been reflected in the system drawings
 
 - Minimum RoomOS version 10.17.1
 - If running RoomOS 11 , minimum version is 11.2.1.0
-- Codec Pro with QuadCam or SpeakerTrack 60 camera array on each room (SP60 support is experimental)
+- Codec Pro or Codec EQ with QuadCam or SpeakerTrack 60 camera array on each room (SP60 support is experimental)
 
 ## Installation/Configuration
 
@@ -28,7 +32,7 @@ Follow the [Version 3 Two-way System Drawing](./Version_3_Two-way_System_Drawing
 
 For configuration setup and further hardware setup instructions, refer to the [Installation Instructions for N-Way Divisible Conference Rooms Version 3.1](./Installation_Instructions_for_N_Way_Divisible_Conference_Rooms_Version_3_1.pdf) document in this repository.
 
-Install GMM_Lib.js and join_split.js on each codec (primary and secondary)
+Install GMM_Lib.js and divisible_room.js on each codec (primary and secondary)
 
 If you wish to use the USB Mode v3 macro for USB passthru , install the USB_Mode_Version_3.js macro onto the codec(s) you wish to use it with.
 

@@ -79,3 +79,10 @@
 - Added support for auto-trigger of presenterTrack so that you can keep it on from the custom  
   panel button (including QA mode) and have it stop tracking once you leave the stage and re-acquire  
   when you return to it.
+
+10/9/23 Changes (version 2.1.14)
+
+- Added support for Ethernet and USB mics for compositions on the Primary only
+- Added code to turn off HDMI input Audio on all incoming tie lines (connectors) on Primary
+- Added ability to set specific volume levels on primary when combining or splitting rooms
+- Added explicit commands to turn on Closeup mode for speakertracking when selected as default
