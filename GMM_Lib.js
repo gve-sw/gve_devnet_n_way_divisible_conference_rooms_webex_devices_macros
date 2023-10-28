@@ -29,9 +29,9 @@ or implied.
  *                            been merged in GMM_Lib version 1.7.0
  * 
  * Released: May 16, 2022
- * Updated: May 18, 2023 || 5:01pm EST
+ * Updated: Oct 10, 2023 || 5:01pm EST
  * 
- * Version: 1.9.7_InDev
+ * Version: 1.9.701_InDev
  * 
  * GMM.Config.adjustHTTPClientTimeout
  * 
@@ -374,10 +374,10 @@ export const GMM = {
           const subGroup = GMM_filter_DeviceIP.toString().split(',')
           for (let i = 0; i < subGroup.length; i++) {
             if (this.group.includes(subGroup[i])) {
-            this.Params.Url = `https://${subGroup[i]}/putxml`
-            const body = `<Command><Message><Send><Text>${JSON.stringify(this.Payload)}</Text></Send></Message></Command>`
-            GMM.DevAssets.queue.push({ Params: JSON.parse(JSON.stringify(this.Params)), Body: body, Device: subGroup[i], Type: 'Remote_IP', Id: `${id}` })
-            console.debug({ 'GMM Debug': `Remote_IP message queued for [${subGroup[i]}]`, Filter: 'True', Payload: JSON.stringify(this.Payload).replace(GMM.DevAssets.filterAuthRegex, `"Auth":"***[HIDDEN]***"`) })
+              this.Params.Url = `https://${subGroup[i]}/putxml`
+              const body = `<Command><Message><Send><Text>${JSON.stringify(this.Payload)}</Text></Send></Message></Command>`
+              GMM.DevAssets.queue.push({ Params: JSON.parse(JSON.stringify(this.Params)), Body: body, Device: subGroup[i], Type: 'Remote_IP', Id: `${id}` })
+              console.debug({ 'GMM Debug': `Remote_IP message queued for [${subGroup[i]}]`, Filter: 'True', Payload: JSON.stringify(this.Payload).replace(GMM.DevAssets.filterAuthRegex, `"Auth":"***[HIDDEN]***"`) })
             } else {
               const filterError = { '⚠ GMM Error ⚠': `Device [${subGroup[i]}] not found in device group`, Resolution: `Remove Device [${subGroup[i]}] from your queue filter or include Device [${subGroup[i]}] when this class is instantiated` }
               console.error(filterError)
@@ -693,8 +693,15 @@ export const GMM = {
     Receiver: {
       on: function (callback) {
         xapi.Event.Message.Send.on(event => {
-          let response = JSON.parse(event.Text)
-          callback(response)
+          let response = {};
+          try {
+            response = JSON.parse(event.Text)
+            callback(response)
+          }
+          catch (error) {
+            console.debug(`GMM_Lib: Received unformatted message: ${event.Text} ... converting to local status message. `)
+            callback({ RawMessage: event.Text })
+          }
         })
       },
       once: function (callback) {

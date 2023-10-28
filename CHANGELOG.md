@@ -86,3 +86,12 @@
 - Added code to turn off HDMI input Audio on all incoming tie lines (connectors) on Primary
 - Added ability to set specific volume levels on primary when combining or splitting rooms
 - Added explicit commands to turn on Closeup mode for speakertracking when selected as default
+
+10/27/23 Changes (version 2.2.0)
+
+- Added support for external controllers to send microphone active messages in the format MIC_ACTIVE_XX so that the macro will use that for selecting video compositions to switch the video input for a call. This way external controllers can handle all audio for the rooms (mics and speakers) and just let the divisible_room macro handle the video switching and overall call control and touch controller states.
+- Added support for switching between different video sources based on local mic input in secondary rooms even when combined
+- Added support for multiple quadcams on primary and secondary rooms by supporting Auxiliary codecs running the aux_codec macro to control their locally connected QuadCam
+- Split out configuration sections of the macro in the divisible_room.js file to a separate divisible_config.js file for simpler updating of macro code and to support multiple advanced layouts.
+- Added support for multiple advanced layouts including the ability to give dual roles to some of the codecs so they act as a Primary or Secondary accourding to the selected layout.
+- Added support for up to three wall sensors connected via GPIO PINS 1-3 when using advanced layouts.

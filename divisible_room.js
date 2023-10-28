@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.1.14
-* Released: October 9, 2023
-* Latest RoomOS version tested: 11.8.1.7
+* Version: 2.2.0
+* Released: October 27, 2023
+* Latest RoomOS version tested: 11.9.1.13 
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -30,8 +30,8 @@ or implied.
 * 
 *    
 * 
-*    As a macro, the features and functions of this webex devices executive room voice activated 
-*    switching macro are not supported by Cisco TAC
+*    As a macro, the features and functions of this webex n-way divisibe conference  
+*    rooms macro are not supported by Cisco TAC
 * 
 *    Hardware and Software support are provided by their respective manufacturers 
 *      and the service agreements they offer
@@ -47,303 +47,51 @@ import { GMM } from './GMM_Lib'
 const minOS10Version = '10.17.1.0';
 const minOS11Version = '11.2.1.0';
 
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 +
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-*/
+// Set JS_MULTI_ROLE to true if you will need to change roles of codecs in the solution from
+// Primary to Secondary to support more advanced layouts. If you do so, you also need to fill out
+// Multiple profile_LAY constants in divisible_config.js and the following constants there: 
+// THIS_CODEC_IP, LAYOUTS, L_WALLS
+const JS_MULTI_ROLE = false;
 
-// The JOIN_SPLIT_ROOM_ROLE const tells the macro in the particular codec it is running
-// what role it should play; JS_PRIMARY or JS_SECONDARY
-const JS_PRIMARY = 1, JS_SECONDARY = 2, JS_NONE = 0
+import * as divisible_config from './divisible_config';
 
-// In this section, write in the values for the constants below.
-// For ROOM_ROLE fill in either JS_PRIMARY or JS_SECONDARY as the value.
-// If you wired your rooms different from what is indicated in the Version_3_Two-way_System_Drawing.pdf document
-// you can modify the  SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID
-// SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID and SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID constants
-// to match your setup. 
-// For PRIMARY_CODEC_IP enter the IP address for the Primary Codec. 
-const JOIN_SPLIT_CONFIG = {
-  ROOM_ROLE: JS_PRIMARY,
-  SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID: 3, // change only for non-standard singe screen setups
-  SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID: 5, // change only if non standard (i.e. codec EQ)
-  SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID: 3, // change only for non-standard singe screen setups
-  SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID: 4, // change only for non-standard singe screen setups
-  PRIMARY_CODEC_IP: '10.0.0.100'
-}
+let CONF = divisible_config.profile_LAY1;
 
-// If you fill out the OTHER_CODEC_USERNAME and OTHER_CODEC_PASSWORD with the credentials to be able to log
-// into the the Secondary codec (if configuring Primary) or Primary codec (if configuring Secondary)
-// they will be used to establish an HTTP connection with that other codec, but these credentials will be
-// stored clear text in the macro. 
-// If you wish to slightly obfuscate the credentials, use a Base64 encoded string for OTHER_CODEC_USERNAME and
-// leave OTHER_CODEC_PASSWORD blank. If you do that, you would need to combine the username and password in one string
-// separated by a colon (i.e. "username:password") before Base64 encoding with a tool such as https://www.base64encode.org/
-// Instructions for creating these admin accounts are in the "Installation Instructions" document.
-const OTHER_CODEC_USERNAME = '';
-const OTHER_CODEC_PASSWORD = '';
-
-
-
-
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 
-+ Only for use on PRIMARY Codec (i.e set ROOM_ROLE : JS_PRIMARY above, then fill this section
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-*/
-
-// If you wish to pin-protect the room combine/split control
-// panel (when not using wall sensor), enter a numeric value for COMBINE_CONTROL_PIN
-// otherwise leave it blank: ""
-const COMBINE_CONTROL_PIN = "9999"
-
-// For more reliability when combining and dividing rooms you can use a custom cable connecting the 
-// GPIO pins 2-4 between the primary codec and secondary codecs. This cable cannot be used if you have 
-// a setup where you need to "promote" a secondary room to primary to accomodate specific room layouts
-// in which case the value should be false.
-const USE_GPIO_INTERCODEC = false;
-
-// USE_WALL_SENSOR controls if you use a physical wall sensor or not
-// If set to false, you will get a custom panel to manually switch rooms from join to split
-// If set to true, you will get a PIN protected override button, in case the wall sensor is broken
-// and you need to override manually
-const USE_WALL_SENSOR = false
-
-// WALL_SENSOR_COMBINED_STATE shoud contain the state of PIN 1 when the rooms is
-// combined. This could be 'High' or 'Low' depending on how the sensor is wired 
-const WALL_SENSOR_COMBINED_STATE = 'Low'
-
-/*
-  If you set USE_WALL_SENSOR to true above, you can
-  change the override protect PINs here if needed.
-*/
-const COMBINE_PIN = "1234";
-const SPLIT_PIN = "4321";
-const FIXED_SENSOR = "5678";
-
-
-// USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS speficies if different settings should be used for presentertrack on primary codec
-// for combined and split modes. If set to true, you must modify the settings for presentertrack to use for each scenario in the 
-// SPLIT_PRESENTERTRACK_SETTINGS and COMBINED_PRESENTERTRACK_SETTINGS object constants below. 
-// Instructions on how setup and to obtain the settings from the primary codec can be found in 
-// the "How_to_Setup_Two-PresenterTrack_Zones.pdf" document in the same repository for this macro. 
-const USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS = false;
-const SPLIT_PRESENTERTRACK_SETTINGS = {
-  PAN: -1000,
-  TILT: -309,
-  ZOOM: 4104,
-  TRIGGERZONE: '0,95,400,850'
-} //Replace these placeholder values with your actual values.
-
-// Each key in the N_COMBINED_PRESENTERTRACK_SETTINGS object refers to the
-// name of compositions associated to the secondary rooms selected (separated by ':' ), in addition
-// to the primary room,  when combining rooms for which you wish to use the set 
-// of values for presenter track reflected in the value of the entry. 
-// For example, entry with key 'RoomSecondaryRight' will be used when the primary room
-// plus the secondary codec associated to the RoomSecondaryRight are combined, and 
-// entry with key 'RoomSecondaryLeft:RoomSecondaryRight' will be used when the primary room
-// plus the secondary codecs associated to both the RoomSecondaryRight and RoomSecondaryRight are combined
-// into a 3 way combined room 
-const N_COMBINED_PRESENTERTRACK_SETTINGS = {
-  'RoomSecondaryRight':
-  {
-    PAN: -1378,
-    TILT: -309,
-    ZOOM: 4104,
-    TRIGGERZONE: '0,89,549,898'
-  },
-  'RoomSecondaryLeft':
-  {
-    PAN: -1378,
-    TILT: -309,
-    ZOOM: 4104,
-    TRIGGERZONE: '0,89,549,898'
-  },
-  'RoomSecondaryLeft:RoomSecondaryRight':
-  {
-    PAN: -1378,
-    TILT: -309,
-    ZOOM: 4104,
-    TRIGGERZONE: '0,89,549,898'
-  },
-  'RoomSecondaryLeft:RoomSecondaryRight:RoomSecondaryFarRight':
-  {
-    PAN: -1378,
-    TILT: -309,
-    ZOOM: 4104,
-    TRIGGERZONE: '0,89,549,898'
-  }
-}  //Replace these placeholder values with your actual values.
-
-
-
-// CHK_VUMETER_LOUDSPEAKER specifies if we check the LoudspeakerActivity flag from the VuMeter events
-// to ignore any microphone activity while the loudspeakers are active to reduce the possibility of
-// switching due to sound coming in from remote participants in the meeting if the AfterAEC setting
-// is not being effective. Set to true to perform the check for each microphone activity event. 
-const CHK_VUMETER_LOUDSPEAKER = false;
-
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 +
-+ Only for use on SECONDARY Codec (i.e set ROOM_ROLE : JS_SECONDARY above, then fill this section
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-*/
-
-// To set the volume of the primary codecs to a specific value when combined vs when standalone, set the
-// the PRIMARY_COMBINED_VOLUME_COMBINED and PRIMARY_COMBINED_VOLUME_STANDALONE constants
-// if you leave them with value 0 they will be ignored
-const PRIMARY_COMBINED_VOLUME_COMBINED = 0
-const PRIMARY_COMBINED_VOLUME_STANDALONE = 0
-
-// Change SECONDARY_COMBINED_VOLUME_CHANGE_STEPS if you want to adjust the volume on the secondary
-// codec when switching modes. Each step is equivalent to a 0.5 dB change. Set the value to 0 if you wish
-// to simply set the actual volume wne combined or standalone by using the SECONDARY_COMBINED_VOLUME_COMBINED and
-// SECONDARY_COMBINED_VOLUME_STANDALONE constants below
-const SECONDARY_COMBINED_VOLUME_CHANGE_STEPS = 10
-
-// To set the volume of the secondary codecs to a specific value when combined vs when standalone, set the
-// SECONDARY_COMBINED_VOLUME_CHANGE_STEPS to 0 and specific the correct volume you wish to set the codec to using
-// the SECONDARY_COMBINED_VOLUME_COMBINED and SECONDARY_COMBINED_VOLUME_STANDALONE constants
-const SECONDARY_COMBINED_VOLUME_COMBINED = 0
-const SECONDARY_COMBINED_VOLUME_STANDALONE = 0
-
-// If you would like to use the speaker on the monitor 1 in the secondary room, set SECONDARY_USE_MONITOR_AUDIO to true
-// otherwise the macro will turn off Audio on that connector
-const SECONDARY_USE_MONITOR_AUDIO = false;
-
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ SECTION 4 - SECTION 4 - SECTION 4 - SECTION 4 - SECTION 4 - SECTION 4 +
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-General microphones and video sources for both primary and secondary codecs
-Currently only the primary will use the compositions but in a future version this will change
-NOTE: See section 6 for PresenterTrack QA mode configuration and the PRESENTER_QA_AUDIENCE_MIC_IDS array 
-*/
-
-const config = {
-  monitorMics: [1, 2, 3, 4, 5, 6, 7, 8], // input connectors associated to the microphones being used in the primary or secondary room
-  ethernetMics: [11, 12, 13, 14], // IDs associated to Ethernet mics: e.j. 12 is Ethernet Mic 1, sub-ID 2. USE ONLY FOR JS_PRIMARY SOURCE COMPOSITIONS
-  usbMics: [101], // Mic input connectors associated to the USB microphones being used in the main codec: 101 is USB Mic 1
-  compositions: [     // Create your array of compositions, NOT NEEDED IF YOU ARE CONFIGURING A SECONDARY CODEC 
-    {
-      name: 'RoomMain',     // Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
-      codecIP: JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP,
-      mics: [1, 2, 3],             // Mics you want to associate with this composition
-      connectors: [1],    // Video input connector Ids to use
-      source: JS_PRIMARY,
-      layout: 'Prominent',       // Layout to use
-      preset: 0 // use a camera preset instead of a layout with specific connectors.
-    },
-    {
-      name: 'RoomSecondaryRight', //Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
-      codecIP: '10.0.0.100',
-      mics: [8], // ANALOG MICS ONLY IF FOR JS_SECONDARY SOURCE
-      connectors: [2],
-      source: JS_SECONDARY,
-      layout: 'Prominent',       // Layout to use
-      preset: 0 // use a camera preset instead of a layout with specific connectors.
-    },
-    {
-      name: 'RoomSecondaryLeft', // Name for your composition. If source is JS_SECONDARY, name will be used in toggle UI
-      codecIP: '10.0.0.110',
-      mics: [7], // ANALOG MICS ONLY IF FOR JS_SECONDARY SOURCE
-      connectors: [3],
-      source: JS_SECONDARY,
-      layout: 'Prominent',       // Layout to use
-      preset: 0 // use a camera preset instead of a layout with specific connectors.
-    },
-    {
-      name: 'Overview',          // IMPORTANT: There needs to be an overview compositino with mics: [0]
-      codecIP: JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP,
-      mics: [0],
-      connectors: [3, 1, 2], // Specify here the video inputs and order to use to compose the "side by side" view
-      source: JS_NONE,
-      layout: 'Equal',       // Layout to use
-      preset: 0 // use a camera preset instead of a layout with specific connectors.
+async function checkAltconfig() {
+  await GMM.memoryInit();
+  if (JS_MULTI_ROLE) {
+    let stored_alt_config = ''
+    stored_alt_config = await GMM.read.global('JoinSplit_alt_config').catch(async e => {
+      console.log("No initial JoinSplit_alt_config global detected, setting to 'LAY1' ")
+      return '';
+    })
+    if (stored_alt_config == '') {
+      await GMM.write.global('JoinSplit_alt_config', 'LAY1').then(() => {
+        console.log({ Message: 'ChangeState', Action: 'Config initialized to LAY1.' })
+        stored_alt_config = 'LAY1';
+      })
     }
-  ]
+    else {
+      console.log({ Message: 'Loading config profile.', Action: `Loaded config: ${stored_alt_config}.` })
+      switch (stored_alt_config) {
+        case 'LAY1':
+          CONF = divisible_config.profile_LAY1
+          break;
+        case 'LAY2':
+          CONF = divisible_config.profile_LAY2
+          break;
+        case 'LAY3':
+          CONF = divisible_config.profile_LAY3
+          break;
+        case 'LAY4':
+          CONF = divisible_config.profile_LAY4
+          break;
+
+      }
+    }
+  }
 }
 
-
-// If you are using a SpeakerTrack 60, set QUAD_CAM_ID to the connector ID where the first camera of the array is connected 
-// and also use that ID in the connetors array in the compositions above   
-const QUAD_CAM_ID = 1;
-
-
-const OVERVIEW_SINGLE_SOURCE_ID = 1;
-
-// In RoomOS 11 there are multiple SpeakerTrack default behaviors to choose from on the navigator or
-// Touch10 device. Set ST_DEFAULT_BEHAVIOR to the one you want this macro to use from these choices:
-// Auto: The same as BestOverview.
-// BestOverview: The default framing mode is Best overview. 
-// Closeup: The default framing mode is Closeup (speaker tracking). 
-// Current: The framing mode is kept unchanged when leaving a call. 
-// Frames: The default framing mode is Frames.
-const ST_DEFAULT_BEHAVIOR = 'Closeup'
-
-
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ SECTION 5 - SECTION 5 - SECTION 5 - SECTION 5 - SECTION 5 - SECTION 5 +
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-TIMERS and THRESHOLDS
-*/
-
-
-// Time to wait for silence before setting Speakertrack Side-by-Side mode
-const SIDE_BY_SIDE_TIME = 10000; // 10 seconds
-// Time to wait before switching to a new speaker
-const NEW_SPEAKER_TIME = 2000; // 2 seconds
-// Time to wait before activating automatic mode at the beginning of a call
-const INITIAL_CALL_TIME = 15000; // 15 seconds
-
-// WEBRTC_VIDEO_UNMUTE_WAIT_TIME only applies to RoomOS version 10 since
-// have to to implement a woraround there to be able to switch cameras
-// while in a WebRTC call. Values less than 1500 ms do not seem to work, but
-// if you are having trouble getting switching to work in WebRTC calls you can increase
-// this value although that will affect the overall experience since during this time
-// the remote participants just see a black screen instead of the video feed.
-const WEBRTC_VIDEO_UNMUTE_WAIT_TIME = 1500;
-
-// Microphone High/Low Thresholds
-const MICROPHONELOW = 6;
-const MICROPHONEHIGH = 25;
-
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 +
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-Presenter Track Q&A Mode
-*/
-// ALLOW_PRESENTER_QA_MODE controls if the custom panel for activating PresenterTrack with or without 
-// Q&A Mode is shown in the Touch10 or Navigator. Without it, you cannot activate PresenterTrack Q&A mode
-const ALLOW_PRESENTER_QA_MODE = true;
-
-//PRESENTER_QA_AUDIENCE_MIC_IDS is an array for Mic IDs that are being used for the audience. 
-const PRESENTER_QA_AUDIENCE_MIC_IDS = [1, 2]
-
-
-// PRESENTER_QA_KEEP_COMPOSITION_TIME is the time in ms that the macro will keep sending
-// a composed image of the presenter and an audience member asking a question after the question
-// has been asked by any audience member. If different audience members ask questions while the composition 
-// is being shown after NEW_SPEAKER_TIME milliseconds have passed, the composition will change 
-// to use that new audience member instead of the original. This will continue until no other audience members have
-// spoken for PRESENTER_QA_KEEP_COMPOSITION_TIME milliseconds and then the code will resume sending only the 
-// full video feed from the Presenter camera 
-const PRESENTER_QA_KEEP_COMPOSITION_TIME = 7000
-
-
-/*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ DO NOT EDIT ANYTHING BELOW THIS LINE                                  +
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-*/
 
 const enableKeepAlive = false;
 
@@ -425,8 +173,8 @@ async function validate_config() {
   if (module.name.replace('./', '') != 'divisible_room')
     await disableMacro(`config validation fail: macro name has changed to: ${module.name.replace('./', '')}. Please set back to: divisible_room`);
 
-  if (OTHER_CODEC_USERNAME == '')
-    await disableMacro(`config validation fail: OTHER_CODEC credentials must be set.  Current values: OTHER_CODEC_USERNAME: ${OTHER_CODEC_USERNAME} OTHER_CODEC_PASSWORD= ${OTHER_CODEC_PASSWORD}`);
+  if (CONF.OTHER_CODEC_USERNAME == '')
+    await disableMacro(`config validation fail: OTHER_CODEC credentials must be set.  Current values: CONF.OTHER_CODEC_USERNAME: ${CONF.OTHER_CODEC_USERNAME} CONF.OTHER_CODEC_PASSWORD= ${CONF.OTHER_CODEC_PASSWORD}`);
   // allow up to 8 analog mics
   let allowedMics = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -444,59 +192,69 @@ async function validate_config() {
     allowedUSBMics.push(100 + i)
   }
 
+  let allowedExternalMics = []
+  // allow up to  99 External mics
+  for (let i = 1; i <= 99; i++) {
+    allowedExternalMics.push(900 + i)
+  }
 
   // only allow up to 8 analog microphones
-  if (config.monitorMics.length > 8)
-    await disableMacro(`config validation fail: config.monitorMics can only have up to 8 entries. Current value: ${config.MonitorMics} `);
+  if (CONF.config.monitorMics.length > 8)
+    await disableMacro(`config validation fail: CONF.config.monitorMics can only have up to 8 entries. Current value: ${CONF.config.MonitorMics} `);
   // only allow up to 8 analog microphones
-  if (config.ethernetMics.length > 64)
-    await disableMacro(`config validation fail: config.ethernetMics can only have up to 64 entries. Current value: ${config.ethernetMics} `);
+  if (CONF.config.ethernetMics.length > 64)
+    await disableMacro(`config validation fail: CONF.config.ethernetMics can only have up to 64 entries. Current value: ${CONF.config.ethernetMics} `);
   // only allow up to 8 analog microphones
-  if (config.usbMics.length > 4)
-    await disableMacro(`config validation fail: config.usbMics can only have up to 4 entries. Current value: ${config.usbMics} `);
+  if (CONF.config.usbMics.length > 4)
+    await disableMacro(`config validation fail: CONF.config.usbMics can only have up to 4 entries. Current value: ${CONF.config.usbMics} `);
+  if (CONF.config.externalMics.length > 99)
+    await disableMacro(`config validation fail: CONF.config.externalMics can only have up to 99 entries. Current value: ${CONF.config.ethernetMics} `);
 
-  if ((config.monitorMics.length + config.ethernetMics + config.usbMics.length) < 1)
-    await disableMacro(`config validation fail: there must be at least one microphone configured between config.monitorMics, config.ethernetMics and config.usbMics.`);
+  if ((CONF.config.monitorMics.length + CONF.config.ethernetMics + CONF.config.usbMics.length + CONF.config.externalMics.length) < 1)
+    await disableMacro(`config validation fail: there must be at least one microphone configured between CONF.config.monitorMics, CONF.config.ethernetMics and CONF.config.usbMics.`);
 
 
   // Check if using USB mic/input, that Echo control is turned on
-  if (config.usbMics.length > 0) {
-    const usbEchoControl = await xapi.Config.Audio.Input.USBInterface[1].EchoControl.Mode.get()
+  if (CONF.config.usbMics.length > 0) {
+    const usbEchoControl = await xapi.config.Audio.Input.USBInterface[1].EchoControl.Mode.get()
     if (usbEchoControl != 'On')
       await disableMacro(`config validation fail: when using USB microphone input, Echo Control needs to be enabled. Only asynchronous USB devices are supported. Please enable and re-activate macro`);
 
   }
 
   // make sure the mics are within those specified in the monitorMics array
-  if (!config.monitorMics.every(r => allowedMics.includes(r)))
-    await disableMacro(`config validation fail: config.monitorMics can only have analog mic ids 1-8. Current value: ${config.monitorMics} `);
+  if (!CONF.config.monitorMics.every(r => allowedMics.includes(r)))
+    await disableMacro(`config validation fail: CONF.config.monitorMics can only have analog mic ids 1-8. Current value: ${CONF.config.monitorMics} `);
 
-  if (!config.ethernetMics.every(r => allowedEthernetMics.includes(r)))
-    await disableMacro(`config validation fail: config.ethernetMics can only include Ethernet mics 1-8(8 lobes each). Current value: ${config.ethernetMics} `);
+  if (!CONF.config.ethernetMics.every(r => allowedEthernetMics.includes(r)))
+    await disableMacro(`config validation fail: CONF.config.ethernetMics can only include Ethernet mics 1-8(8 lobes each). Current value: ${CONF.config.ethernetMics} `);
 
-  if (!config.usbMics.every(r => allowedUSBMics.includes(r)))
-    await disableMacro(`config validation fail: config.usbMics can only include USB mics 1-4 (values 101-104). Current value: ${config.usbMics} `);
+  if (!CONF.config.usbMics.every(r => allowedUSBMics.includes(r)))
+    await disableMacro(`config validation fail: CONF.config.usbMics can only include USB mics 1-4 (values 101-104). Current value: ${CONF.config.usbMics} `);
 
+  if (!CONF.config.externalMics.every(r => allowedExternalMics.includes(r)))
+    await disableMacro(`config validation fail: CONF.config.externalMics can only include external mics 01-99 (values 901-999). Current value: ${CONF.config.externalMics} `);
 
-  // check for duplicates in config.monitorMics
-  if (new Set(config.monitorMics).size !== config.monitorMics.length)
-    await disableMacro(`config validation fail: config.monitorMics cannot have duplicates. Current value: ${config.monitorMics} `);
-  if (new Set(config.ethernetMics).size !== config.ethernetMics.length)
-    await disableMacro(`config validation fail: config.ethernetMics cannot have duplicates. Current value: ${config.ethernetMics} `);
-  if (new Set(config.usbMics).size !== config.usbMics.length)
-    await disableMacro(`config validation fail: config.usbMics cannot have duplicates. Current value: ${config.usbMics} `);
+  // check for duplicates in CONF.config.monitorMics
+  if (new Set(CONF.config.monitorMics).size !== CONF.config.monitorMics.length)
+    await disableMacro(`config validation fail: CONF.config.monitorMics cannot have duplicates. Current value: ${CONF.config.monitorMics} `);
+  if (new Set(CONF.config.ethernetMics).size !== CONF.config.ethernetMics.length)
+    await disableMacro(`config validation fail: CONF.config.ethernetMics cannot have duplicates. Current value: ${CONF.config.ethernetMics} `);
+  if (new Set(CONF.config.usbMics).size !== CONF.config.usbMics.length)
+    await disableMacro(`config validation fail: CONF.config.usbMics cannot have duplicates. Current value: ${CONF.config.usbMics} `);
 
-  // Check for valid audience mics configured for the Presenter QA Mode feature
-  if (ALLOW_PRESENTER_QA_MODE)
-    if (!PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.monitorMics.includes(r)) &&
-      !PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.ethernetMics.includes(r)) &&
-      !PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => config.usbMics.includes(r)))
-      await disableMacro(`config validation fail: PRESENTER_QA_AUDIENCE_MIC_IDS can only specify values contained in config.monitorMics, config.ethernetMics or config.usbMics . Current values PRESENTER_QA_AUDIENCE_MIC_IDS: ${PRESENTER_QA_AUDIENCE_MIC_IDS}`);
+  // Check for valid audience mics CONFIGURED for the Presenter QA Mode feature
+  if (CONF.ALLOW_PRESENTER_QA_MODE)
+    if (!CONF.PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => CONF.config.monitorMics.includes(r)) &&
+      !CONF.PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => CONF.config.ethernetMics.includes(r)) &&
+      !CONF.PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => CONF.config.externalMics.includes(r)) &&
+      !CONF.PRESENTER_QA_AUDIENCE_MIC_IDS.every(r => CONF.config.usbMics.includes(r)))
+      await disableMacro(`config validation fail: CONF.PRESENTER_QA_AUDIENCE_MIC_IDS can only specify values contained in CONF.config.monitorMics, CONF.config.ethernetMics or CONF.config.usbMics . Current values CONF.PRESENTER_QA_AUDIENCE_MIC_IDS: ${CONF.PRESENTER_QA_AUDIENCE_MIC_IDS}`);
 
   // if running in secondary codec make sure we have a valid IP address for the primary codec
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY) {
-    if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP))
-      await disableMacro(`config validation fail: Invalid IP address configured to talk to primary codec: ${JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP} `);
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY) {
+    if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP))
+      await disableMacro(`config validation fail: Invalid IP address CONFIGURED to talk to primary codec: ${CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP} `);
 
   }
   else {
@@ -504,23 +262,24 @@ async function validate_config() {
     // add value 0 to allowedMics array to include overview composition
     allowedMics.push(0)
     // consolidate all allowed mics to check each composition for valid mics.
-    allowedMics = allowedMics.concat(allowedEthernetMics, allowedUSBMics)
+    allowedMics = allowedMics.concat(allowedEthernetMics, allowedUSBMics, allowedExternalMics)
     // now let's check each composition
-    for (let i = 0; i < config.compositions.length; i++) {
-      let compose = config.compositions[i];
-      // make sure each composition is marked JS_PRIMARY or JS_SECONDARY
-      if (![JS_PRIMARY, JS_SECONDARY, JS_NONE].includes(compose.source)) await disableMacro(`config validation fail: composition named ${compose.name} should have a valid value for key 'source' (JS_PRIMARY, JS_SECONDARY or JS_NONE).`);
+    for (let i = 0; i < CONF.config.compositions.length; i++) {
+      let compose = CONF.config.compositions[i];
+      // make sure each composition is marked CONF.JS_PRIMARY or CONF.JS_SECONDARY
+      if (![CONF.JS_PRIMARY, CONF.JS_SECONDARY, CONF.JS_AUXILIARY, CONF.JS_LOCAL].includes(compose.source)) await disableMacro(`config validation fail: composition named ${compose.name} should have a valid value for key 'source' (CONF.JS_PRIMARY, CONF.JS_SECONDARY, CONF.JS_AUXILIARY or CONF.JS_LOCAL).`);
 
-      // make sure if JS_SECONDARY source, then there is a real IP address configured
-      if (compose.source == JS_SECONDARY)
+      // make sure if CONF.JS_SECONDARY source, then there is a real IP address CONFIGURED
+      if (compose.source == (CONF.JS_SECONDARY || CONF.JS_AUXILIARY))
         if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(compose.codecIP))
           await disableMacro(`config validation fail: Invalid IP address for composition ${compose.name}: ${compose.codecIP} `);
 
 
-      // make sure if JS_SECONDARY source, mics specified are only analog mics being monitored
-      if (compose.source == JS_SECONDARY)
-        if (!compose.mics.every(r => config.monitorMics.includes(r)))
-          await disableMacro(`config validation fail: Invalid mics in composition ${compose.name}: ${compose.mics}. Only analog mics allowed for tie lines from secondaries`);
+      /*
+            // make sure if CONF.JS_SECONDARY source, mics specified are only analog mics being monitored
+            if (compose.source == CONF.JS_SECONDARY)
+              if (!compose.mics.every(r => CONF.config.monitorMics.includes(r)))
+                await disableMacro(`config validation fail: Invalid mics in composition ${compose.name}: ${compose.mics}. Only analog mics allowed for tie lines from secondaries`); */
 
       // only allow up to 8 mics and at least 1 specified for each composition
       if (compose.mics.length > 8 || compose.mics.length < 1)
@@ -528,21 +287,19 @@ async function validate_config() {
 
       // make sure the mics are within those specified in the monitorMics array, plus 0 for overview
       if (!compose.mics.every(r => allowedMics.includes(r)))
-        await disableMacro(`config validation fail: mics for each composition can only have mic ids 0-8. Current value: ${compose.mics} `);
+        await disableMacro(`config validation fail: mics for each composition can only have mic ids 0-8, 11-88, 101-104 or 901-999. Current value: ${compose.mics} `);
 
-      // keep track that we have at least one composition with mics [0] to check at the end and that it is JS_PRIMARY sourced
-      if (JSON.stringify(compose.mics) == JSON.stringify([0]) && compose.source == JS_NONE) hasOverview = true;
+      // keep track that we have at least one composition with mics [0] to check at the end and that it is CONF.JS_PRIMARY sourced
+      if (JSON.stringify(compose.mics) == JSON.stringify([0]) && compose.source == CONF.JS_LOCAL) hasOverview = true;
     }
 
     // check that there was at least one Overview composition with mics==[0]
     if (!hasOverview)
-      await disableMacro('config validation fail: no overview composition configured or it does not have source set to JS_NONE');
+      await disableMacro('config validation fail: no overview composition configured or it does not have source set to CONF.JS_LOCAL');
   }
   // all went well, can return true!
   return true;
 }
-
-
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -630,8 +387,8 @@ let panel_combine_split_secondaries_str = `<Row>
   </Row>`
 
 let secondaries_count = 0;
-config.compositions.forEach(compose => {
-  if (compose.codecIP != '' && compose.codecIP != JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
+CONF.config.compositions.forEach(compose => {
+  if ((compose.source == CONF.JS_SECONDARY && compose.codecIP != '') && compose.codecIP != CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
     secondaries_count += 1;
     let theWidgetId = 'widget_tog_' + compose.codecIP.replace(/\./g, "_")
     let theName = compose.name
@@ -669,8 +426,8 @@ var otherCodecs = {};
 
 //Run your init script asynchronously 
 async function init_intercodec() {
-  if (OTHER_CODEC_USERNAME != '')
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+  if (CONF.OTHER_CODEC_USERNAME != '')
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
       let stored_setStatus = {}
       stored_setStatus = await GMM.read.global('JoinSplit_secondariesStatus').catch(async e => {
         console.log("No initial JoinSplit_secondariesStatus global detected, using constants in macro to create new one")
@@ -679,10 +436,10 @@ async function init_intercodec() {
       })
       let codecIPArray = [];
 
-      config.compositions.forEach(compose => {
-        if (compose.codecIP != '' && compose.codecIP != JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
+      CONF.config.compositions.forEach(compose => {
+        if ((compose.source == CONF.JS_SECONDARY && compose.codecIP != '') && compose.codecIP != CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
           console.log(`Setting up connection to secondary codec with IP ${compose.codecIP}`);
-          //otherCodec[compose.codecIP] = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, compose.codecIP)
+          //otherCodec[compose.codecIP] = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, compose.codecIP)
           codecIPArray.push(compose.codecIP);
           console.log(`Creating secondaries keep alive status objects`);
           secondariesKAStatus[compose.codecIP] = { 'online': false };
@@ -700,7 +457,7 @@ async function init_intercodec() {
         }
       })
 
-      otherCodecs = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, codecIPArray)
+      otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, codecIPArray)
       //console.log(otherCodecs)
 
       await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
@@ -708,10 +465,34 @@ async function init_intercodec() {
       })
     }
     else
-      otherCodecs = new GMM.Connect.IP(OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+      otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+
+  // now connect any Auxiliary codecs this one might have CONFIGURED irrespective if primary or secondary
+
+  let codecIPArray = [];
+
+  CONF.config.compositions.forEach(compose => {
+    if (compose.codecIP != '' && compose.source == CONF.JS_AUXILIARY) {
+      console.log(`Setting up connection to aux codec with IP ${compose.codecIP}`);
+      //console.log(`Creating aux status object for this aux codec...`)
+      console.log(`Adding IP address of aux codec to array to create connection object...`)
+      codecIPArray.push(compose.codecIP);
+      AUX_CODEC_STATUS[compose.codecIP] = { enable: true, 'online': false, 'haspeople': true };
+    }
+  })
+
+  // now creating one connection object that sends to multiple aux codecs
+  // but only if there are aux codecs CONFIGURED, otherwise leave as initialized as {}
+  if (codecIPArray.length > 0) {
+    if (CONF.OTHER_CODEC_USERNAME == '')
+      console.error(`Missing username or base64 encoded credentials for aux codecs.. will not connect aux codecs!`);
+    else
+      auxCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, codecIPArray)
+  }
+
 
   // This schedules the keep alive messages to send from primary to secondaries, if enabled. 
-  if (enableKeepAlive && JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+  if (enableKeepAlive && CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
     if (KA_FREQUENCY_SECONDS >= 3 && KA_CHECK_REPLIES_TIMEOUT_MS >= 1000)
       if ((KA_FREQUENCY_SECONDS * 1000) > KA_CHECK_REPLIES_TIMEOUT_MS + 1000)
         setInterval(priSendKeepAlive, KA_FREQUENCY_SECONDS * 1000);
@@ -753,15 +534,16 @@ var JoinSplit_primary_settings = {
 }
 
 let micArrays = {};
-for (var i in config.monitorMics) {
-  micArrays[config.monitorMics[i].toString()] = [0, 0, 0, 0];
+for (var i in CONF.config.monitorMics) {
+  micArrays[CONF.config.monitorMics[i].toString()] = [0, 0, 0, 0];
 }
-for (var i in config.ethernetMics) {
-  micArrays[config.ethernetMics[i].toString()] = [0, 0, 0, 0];
+for (var i in CONF.config.ethernetMics) {
+  micArrays[CONF.config.ethernetMics[i].toString()] = [0, 0, 0, 0];
 }
-for (var i in config.usbMics) {
-  micArrays[config.usbMics[i].toString()] = [0, 0, 0, 0];
+for (var i in CONF.config.usbMics) {
+  micArrays[CONF.config.usbMics[i].toString()] = [0, 0, 0, 0];
 }
+
 let lowWasRecalled = false;
 let lastActiveHighInput = 0;
 let lastSourceDict = { SourceID: '1' }
@@ -824,7 +606,10 @@ let macroTurnedOffST = false;
 let isOSTen = false;
 let isOSEleven = false;
 
+var AUX_CODEC_STATUS = {}
 
+//Declare your object for GMM communication
+var auxCodecs = {};
 
 
 // Initial check for the Video Monitor configuration
@@ -895,17 +680,17 @@ function setGPIOPin4ToLow() {
   console.log('Pin 4 has been set to Low; Rooms are Combined');
 }
 
-function setCombinedMode(combinedValue) {
+async function setCombinedMode(combinedValue) {
   roomCombined = combinedValue;
-  GMM.write.global('JoinSplit_combinedState', roomCombined).then(() => {
+  await GMM.write.global('JoinSplit_combinedState', roomCombined).then(() => {
     console.log({ Message: 'ChangeState', Action: 'Combined state stored.' })
   })
 
 }
 
-function setWallSensorOverride(overrideValue) {
+async function setWallSensorOverride(overrideValue) {
   wallSensorOverride = overrideValue;
-  GMM.write.global('JoinSplit_wallSensorOverride', wallSensorOverride).then(() => {
+  await GMM.write.global('JoinSplit_wallSensorOverride', wallSensorOverride).then(() => {
     console.log({ Message: 'ChangeState', Action: 'Wall Sensor Override state stored.' })
   })
 
@@ -934,20 +719,20 @@ async function initialCombinedJoinState() {
   // Change all these to whatever is needed to trigger on the Primary when it goes into combined
   if (roomCombined) {
     console.log('Primary Room is in Combined Mode');
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
       primaryCombinedMode();
       if (await isCodecPro())
-        if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow();
-      if (!USE_WALL_SENSOR) {
+        if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToLow();
+      if (!CONF.USE_WALL_SENSOR) {
         xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'On' });
       }
     }
     setCombinedMode(true);
   } else {
     console.log('Primary Room is in Divided Mode');
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
       setPrimaryDefaultConfig();
-      if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh();
+      if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToHigh();
     }
     setCombinedMode(false);
   }
@@ -958,7 +743,7 @@ async function initialCombinedJoinState() {
   * This will initialize the room state to Combined or Divided based on the Pin 4 set by Primary
 **/
 async function checkCombinedStateSecondary() {
-  if (USE_GPIO_INTERCODEC) Promise.all([xapi.status.get('GPIO Pin 4')]).then(promises => {
+  if (CONF.USE_GPIO_INTERCODEC) Promise.all([xapi.status.get('GPIO Pin 4')]).then(promises => {
     let [pin4] = promises;
     console.log('Pin4: ' + pin4.State);
     // Change all these to whatever is needed to trigger on the Secondary when it goes into combined
@@ -1075,13 +860,13 @@ function primaryInitPartitionSensor() {
       });
     }
     else {
-      if (state.State === WALL_SENSOR_COMBINED_STATE) {
+      if (state.State === CONF.WALL_SENSOR_COMBINED_STATE) {
         alertJoinedScreen();
         console.log('Primary Switched to Combined Mode [Partition Sensor]');
-        if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+        if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
           primaryCombinedMode();
-          if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
-          if (!USE_WALL_SENSOR) {
+          if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
+          if (!CONF.USE_WALL_SENSOR) {
             xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'On' });
           }
         }
@@ -1090,11 +875,11 @@ function primaryInitPartitionSensor() {
       else {
         alertSplitScreen();
         console.log('Primary Switched to Divided Mode [Partition Sensor]');
-        if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+        if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
           primaryStandaloneMode();
           //primaryCodecSendScreen();
-          if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
-          if (!USE_WALL_SENSOR) {
+          if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
+          if (!CONF.USE_WALL_SENSOR) {
             xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_toggle_combine', Value: 'Off' });
           }
         }
@@ -1113,6 +898,12 @@ function primaryInitPartitionSensor() {
 async function setPrimaryDefaultConfig() {
 
   console.log("Primary default config being run");
+
+  removeWarning();
+  xapi.command('Conference DoNotDisturb Deactivate').catch((error) => { console.error(error); });
+  xapi.command('Video Matrix Reset').catch((error) => { console.error(error); });
+  xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90" + error); });
+
 
   if (await isCodecPro()) {
     xapi.config.set('Audio Input ARC 1 Mode', 'Off')
@@ -1133,23 +924,26 @@ async function setPrimaryDefaultConfig() {
   // MICROPHONES 1 THRU 7 ARE USER CONFIGURABLE
 
   // Do inital configuration for inbound audio tielines 
-  config.compositions.forEach(compose => {
-    if (compose.source == JS_SECONDARY) {
+  CONF.config.compositions.forEach(compose => {
+    if (compose.source == CONF.JS_SECONDARY) {
       compose.mics.forEach(async micId => {
         // THIS IS THE INPUT FOR THE MICROPHONES FROM THE SECONDARY CODEC
-        if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Channel', 'Mono').catch((error) => { console.error("6" + error); });
-        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl Dereverberation', 'Off')
-          .catch((error) => { console.error("7" + error); });
-        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl Mode', 'On')
-          .catch((error) => { console.error("8" + error); });
-        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl NoiseReduction', 'Off')
-          .catch((error) => { console.error("9" + error); });
-        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Level', '18')
-          .catch((error) => { console.error("10" + error); });
-        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'Off')
-          .catch((error) => { console.error("11" + error); });
-        if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' PhantomPower', 'Off').catch((error) => { console.error("12" + error); });
+        if (micId > 1 && micId <= 8) { // do not attempt to set these for external, ethernet or USB mics
+          if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Channel', 'Mono').catch((error) => { console.error("6" + error); });
+          xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl Dereverberation', 'Off')
+            .catch((error) => { console.error("7" + error); });
+          xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl Mode', 'On')
+            .catch((error) => { console.error("8" + error); });
+          xapi.config.set('Audio Input Microphone ' + micId.toString() + ' EchoControl NoiseReduction', 'Off')
+            .catch((error) => { console.error("9" + error); });
+          xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Level', '18')
+            .catch((error) => { console.error("10" + error); });
+          xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'Off')
+            .catch((error) => { console.error("11" + error); });
+          if (await isCodecPro()) xapi.config.set('Audio Input Microphone ' + micId.toString() + ' PhantomPower', 'Off').catch((error) => { console.error("12" + error); });
+        }
       })
+
       compose.connectors.forEach(connectorId => {
         xapi.config.set('Audio Input HDMI ' + connectorId.toString() + ' Mode', 'Off')
           .catch((error) => { console.error("12" + error); });
@@ -1186,12 +980,12 @@ async function setPrimaryDefaultConfig() {
 
   // GPIO
   if (await isCodecPro()) {
-    if (USE_WALL_SENSOR) {
+    if (CONF.USE_WALL_SENSOR) {
       xapi.config.set('GPIO Pin 1 Mode', 'InputNoAction')
         .catch((error) => { console.error("33" + error); });
     }
 
-    if (USE_GPIO_INTERCODEC) {
+    if (CONF.USE_GPIO_INTERCODEC) {
       xapi.config.set('GPIO Pin 2 Mode', 'OutputManualState')
         .catch((error) => { console.error("34" + error); });
       xapi.config.set('GPIO Pin 3 Mode', 'OutputManualState')
@@ -1244,8 +1038,8 @@ async function setPrimaryDefaultConfig() {
 
   // Setting video input from secondary codecs
 
-  config.compositions.forEach(compose => {
-    if (compose.source == JS_SECONDARY) {
+  CONF.config.compositions.forEach(compose => {
+    if (compose.source == CONF.JS_SECONDARY) {
       compose.connectors.forEach(sourceID => {
         console.log(`Configuring video inputs from secondary codec out of composition ${compose.name}`);
         xapi.config.set(`Video Input Connector ${sourceID} CameraControl Mode`, 'Off')
@@ -1332,7 +1126,7 @@ async function setSecondaryDefaultConfig() {
   xapi.config.set('Audio Input HDMI 2 Mode', 'Off')
     .catch((error) => { console.error("5" + error); });
 
-  xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
+  xapi.Config.Audio.Input.HDMI[CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
     .catch((error) => { console.error("5" + error); });;
 
   // This allows us of USB Passthrough
@@ -1347,10 +1141,10 @@ async function setSecondaryDefaultConfig() {
 
   // OUTPUT ARC SECTION (FOR QUAD CAMERA ONLY)
   xapi.config.set('Audio Output ARC 1 Mode', 'On')
-    .catch((error) => { console.error("22" + error); });
+    .catch((error) => { console.error("22" + error); }); //TODO: This need to be turned off if you do not want to use the speakers on the QuadCam
 
   // HDMI AUDIO OUTPUT
-  if (!SECONDARY_USE_MONITOR_AUDIO)
+  if (!CONF.SECONDARY_USE_MONITOR_AUDIO)
     xapi.config.set('Audio Output HDMI 1 Mode', 'Off')
       .catch((error) => { console.error("23" + error); });
   xapi.config.set('Audio Output HDMI 2 Mode', 'Off')
@@ -1366,7 +1160,7 @@ async function setSecondaryDefaultConfig() {
 
   if (await isCodecPro()) {
     // GPIO
-    if (USE_GPIO_INTERCODEC) {
+    if (CONF.USE_GPIO_INTERCODEC) {
       xapi.config.set('GPIO Pin 2 Mode', 'InputNoAction')
         .catch((error) => { console.error("39" + error); });
       xapi.config.set('GPIO Pin 3 Mode', 'InputNoAction')
@@ -1421,39 +1215,39 @@ async function setSecondaryDefaultConfig() {
 
   // Usually HDMI INPUTS 3 AND 4
   // THESE ARE SCREENS 1 AND 2 FROM THE PRIMARY ROOM
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' HDCP Mode', 'Off')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' HDCP Mode', 'Off')
     .catch((error) => { console.error("62" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' CameraControl Mode', 'Off')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' CameraControl Mode', 'Off')
     .catch((error) => { console.error("63" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' InputSourceType', 'Other')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' InputSourceType', 'Other')
     .catch((error) => { console.error("64" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Name', 'Main Video Primary')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Name', 'Main Video Primary')
     .catch((error) => { console.error("65" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' PreferredResolution', '3840_2160_30')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' PreferredResolution', '3840_2160_30')
     .catch((error) => { console.error("66" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' PresentationSelection', 'Manual')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' PresentationSelection', 'Manual')
     .catch((error) => { console.error("67" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Quality', 'Sharpness')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Quality', 'Sharpness')
     .catch((error) => { console.error("68" + error); });
-  xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Visibility', 'Never')
+  xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID + ' Visibility', 'Never')
     .catch((error) => { console.error("69" + error); });
 
   if (JoinSplit_secondary_settings.VideoMonitors == 'Dual' || JoinSplit_secondary_settings.VideoMonitors == 'DualPresentationOnly') {
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' HDCP Mode', 'Off')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' HDCP Mode', 'Off')
       .catch((error) => { console.error("70" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' CameraControl Mode', 'Off')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' CameraControl Mode', 'Off')
       .catch((error) => { console.error("71" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' InputSourceType', 'PC')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' InputSourceType', 'PC')
       .catch((error) => { console.error("72" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Name', 'Content Primary')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Name', 'Content Primary')
       .catch((error) => { console.error("73" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' PreferredResolution', '3840_2160_30')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' PreferredResolution', '3840_2160_30')
       .catch((error) => { console.error("74" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' PresentationSelection', 'Manual')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' PresentationSelection', 'Manual')
       .catch((error) => { console.error("75" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Quality', 'Sharpness')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Quality', 'Sharpness')
       .catch((error) => { console.error("76" + error); });
-    xapi.config.set('Video Input Connector ' + JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Visibility', 'Never')
+    xapi.config.set('Video Input Connector ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID + ' Visibility', 'Never')
       .catch((error) => { console.error("77" + error); });
   }
 
@@ -1501,7 +1295,7 @@ async function startAutomation() {
   allowCameraSwitching = true;
 
   if (inSideBySide) {
-    var currentSTCameraID = QUAD_CAM_ID;
+    var currentSTCameraID = CONF.QUAD_CAM_ID;
     let sourceDict = { SourceID: '0' }
     sourceDict["SourceID"] = currentSTCameraID.toString();
     xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
@@ -1517,11 +1311,11 @@ async function startAutomation() {
   }
 
   if (isOSEleven) {
-    xapi.Config.Cameras.SpeakerTrack.DefaultBehavior.set(ST_DEFAULT_BEHAVIOR);
-    if (ST_DEFAULT_BEHAVIOR == 'Frames') xapi.Command.Cameras.SpeakerTrack.Frames.Activate();
+    xapi.Config.Cameras.SpeakerTrack.DefaultBehavior.set(CONF.ST_DEFAULT_BEHAVIOR);
+    if (CONF.ST_DEFAULT_BEHAVIOR == 'Frames') xapi.Command.Cameras.SpeakerTrack.Frames.Activate();
     else {
       xapi.Command.Cameras.SpeakerTrack.Frames.Deactivate();
-      if (ST_DEFAULT_BEHAVIOR == 'Closeup') xapi.Config.Cameras.SpeakerTrack.Closeup.set('On');
+      if (CONF.ST_DEFAULT_BEHAVIOR == 'Closeup') xapi.Config.Cameras.SpeakerTrack.Closeup.set('On');
     }
   }
 
@@ -1534,11 +1328,11 @@ async function startAutomation() {
 
 
   //registering vuMeter event handler for analog mics
-  if (config.monitorMics.length > 0) {
+  if (CONF.config.monitorMics.length > 0) {
     micHandler();
     micHandler = () => void 0;
     micHandler = xapi.event.on('Audio Input Connectors Microphone', (event) => {
-      if (typeof micArrays[event.id[0]] != 'undefined' && (!CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
+      if (typeof micArrays[event.id[0]] != 'undefined' && (!CONF.CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
         micArrays[event.id[0]].shift();
         micArrays[event.id[0]].push(event.VuMeter);
 
@@ -1554,7 +1348,7 @@ async function startAutomation() {
 
 
   //registering vuMeter event handler for Ethernet mics
-  if (config.ethernetMics.length > 0) {
+  if (CONF.config.ethernetMics.length > 0) {
     micHandlerEthernet();
     micHandlerEthernet = () => void 0;
     micHandlerEthernet = xapi.event.on('Audio Input Connectors Ethernet', (event) => {
@@ -1575,7 +1369,7 @@ async function startAutomation() {
 
 
   //registering vuMeter event handler for USB mics
-  if (config.usbMics.length > 0) {
+  if (CONF.config.usbMics.length > 0) {
     micHandlerUSB();
     micHandlerUSB = () => void 0;
     micHandlerUSB = xapi.event.on('Audio Input Connectors USBMicrophone', (event) => {
@@ -1597,9 +1391,9 @@ async function startAutomation() {
 
   // start VuMeter monitoring
   console.log("Turning on VuMeter monitoring...")
-  for (var i in config.monitorMics) {
+  for (var i in CONF.config.monitorMics) {
     xapi.command('Audio VuMeter Start', {
-      ConnectorId: config.monitorMics[i],
+      ConnectorId: CONF.config.monitorMics[i],
       ConnectorType: 'Microphone',
       IntervalMs: 500,
       Source: 'AfterAEC'
@@ -1608,12 +1402,12 @@ async function startAutomation() {
 
 
   let ethernetMicsStarted = [];
-  for (var i in config.ethernetMics) {
-    if (!ethernetMicsStarted.includes(parseInt(config.ethernetMics[i] / 10))) {
-      ethernetMicsStarted.push(parseInt(config.ethernetMics[i] / 10));
+  for (var i in CONF.config.ethernetMics) {
+    if (!ethernetMicsStarted.includes(parseInt(CONF.config.ethernetMics[i] / 10))) {
+      ethernetMicsStarted.push(parseInt(CONF.config.ethernetMics[i] / 10));
       xapi.Command.Audio.VuMeter.Start(
         {
-          ConnectorId: parseInt(config.ethernetMics[i] / 10),
+          ConnectorId: parseInt(CONF.config.ethernetMics[i] / 10),
           ConnectorType: 'Ethernet',
           IncludePairingQuality: 'Off',
           IntervalMs: 500,
@@ -1623,10 +1417,10 @@ async function startAutomation() {
   }
 
 
-  for (var i in config.usbMics) {
+  for (var i in CONF.config.usbMics) {
     xapi.Command.Audio.VuMeter.Start(
       {
-        ConnectorId: config.usbMics[i] - 100,
+        ConnectorId: CONF.config.usbMics[i] - 100,
         ConnectorType: 'USBMicrophone',
         IncludePairingQuality: 'Off',
         IntervalMs: 500,
@@ -1646,20 +1440,27 @@ function stopAutomation() {
   xapi.Command.Audio.VuMeter.StopAll({});
 
   if (inSideBySide) {
-    var currentSTCameraID = QUAD_CAM_ID;
+    var currentSTCameraID = CONF.QUAD_CAM_ID;
     let sourceDict = { SourceID: '0' }
     sourceDict["SourceID"] = currentSTCameraID.toString();
     xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
     inSideBySide = false;
     console.log("cleared out side by side mode....")
   }
+
+  // set tie line back to primary to local QuadCam just as when initially configured
+  // if secondary in combined mode since we now matrix in current main video source
+  // when automation is turned on
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY && roomCombined)
+    xapi.command('Video Matrix Assign', { Output: CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: 1 }).catch((error) => { console.error(error); });
+
   /*
   console.log("Switching to MainVideoSource connectorID 1 ...");
   //pauseSpeakerTrack(); // in case it is turned on so we can switch video sources
   if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
   xapi.Command.Video.Input.SetMainVideoSource({ SourceId: 1});
   lastSourceDict={ SourceId: 1};
-  if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   //resumeSpeakerTrack(); // in case speaker track is active so we turn off BG mode.
   */
   // using proper way to de-register handlers
@@ -1689,7 +1490,7 @@ function checkMicLevelsToSwitchCamera() {
     //get the input number as an int since it is passed as a string (since it is a key to a dict)
     let input = parseInt(array_key);
     // someone is speaking
-    if (average > MICROPHONEHIGH) {
+    if (average > CONF.MICROPHONEHIGH) {
       // start timer to prevent Side-by-Side mode too quickly
       restartSideBySideTimer();
       if (input > 0) {
@@ -1711,7 +1512,7 @@ function checkMicLevelsToSwitchCamera() {
       }
     }
     // no one is speaking
-    else if (average < MICROPHONELOW) {
+    else if (average < CONF.MICROPHONELOW) {
       // only trigger if enough time has elapsed since someone spoke last
       if (allowSideBySide) {
         if (input > 0 && !lowWasRecalled) {
@@ -1719,6 +1520,64 @@ function checkMicLevelsToSwitchCamera() {
           lowWasRecalled = true;
           console.log("-------------------------------------------------");
           console.log("Low Triggered");
+          console.log("-------------------------------------------------");
+          recallSideBySideMode();
+        }
+      }
+    }
+
+  }
+}
+
+
+function processExternalMicHandler(activeMic) {
+  // activeMic should contain a string with a external mic ID (00-99) passed along by the 
+  // controller via MIC_ACTIVE_XX for us to trigger the switching functionality
+  // we need to prepend the '9' character to it before parsing it into the integer for 
+  // input so we can indicate it is an external mic specified in the CONF.config.externaMics array 
+  let input = parseInt('9' + activeMic)
+  let average = 0;
+  if (allowCameraSwitching) {
+    // simulate valide average to trigger switch since controller already made decision
+    if (input > 900) {
+      average = CONF.MICROPHONEHIGH + 1;
+    }
+    else {
+      average = CONF.MICROPHONELOW - 1;
+      input = 1; // need to simulate that there were valid mic readings
+    }
+
+    // someone is speaking
+    if (average > CONF.MICROPHONEHIGH) {
+      // start timer to prevent Side-by-Side mode too quickly
+      restartSideBySideTimer();
+      if (input > 900) {
+        lowWasRecalled = false;
+        // no one was talking before
+        if (lastActiveHighInput === 0) {
+          makeCameraSwitch(input, average);
+        }
+        // the same person is talking
+        else if (lastActiveHighInput === input) {
+          restartNewSpeakerTimer();
+        }
+        // a different person is talking
+        else if (lastActiveHighInput !== input) {
+          if (allowNewSpeaker) {
+            makeCameraSwitch(input, average);
+          }
+        }
+      }
+    }
+    // no one is speaking
+    else if (average < CONF.MICROPHONELOW) {
+      // only trigger if enough time has elapsed since someone spoke last
+      if (allowSideBySide) {
+        if (input > 0 && !lowWasRecalled) {
+          lastActiveHighInput = 0;
+          lowWasRecalled = true;
+          console.log("-------------------------------------------------");
+          console.log("External Mic Low Triggered");
           console.log("-------------------------------------------------");
           recallSideBySideMode();
         }
@@ -1739,17 +1598,17 @@ async function makeCameraSwitch(input, average) {
 
   // map the loudest mic to the corresponding composition which could be local or from a 
   // secondary codec.
-  var currentSTCameraID = QUAD_CAM_ID;
+  var currentSTCameraID = CONF.QUAD_CAM_ID;
   let sourceDict = { SourceID: '0' } // Just initialize
   let initial_sourceDict = { SourceID: '0' } // to be able to compare later
-  config.compositions.forEach(compose => {
+  CONF.config.compositions.forEach(compose => {
     if (compose.mics.includes(input)) {
-      if ((!roomCombined && JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) && compose.source == JS_SECONDARY) {
+      if ((!roomCombined && CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) && compose.source == CONF.JS_SECONDARY) {
         console.warn(`makeCameraSwitch(): Trying to switch to composition that involves a secondary codec input when not in combined mode!!`)
         restartNewSpeakerTimer();
         return;
       }
-      if ((roomCombined && JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) && compose.source == JS_SECONDARY) {
+      if ((roomCombined && CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) && compose.source == CONF.JS_SECONDARY) {
         if (compose.codecIP in secondariesStatus)
           if (!secondariesStatus[compose.codecIP].selected) {
             console.warn(`makeCameraSwitch(): Trying to switch to composition that involves a secondary codec input which is not selected!!`)
@@ -1814,10 +1673,10 @@ async function makeCameraSwitch(input, average) {
 
 
     // send required messages to auxiliary codec that also turns on speakertrack over there
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
     lastActiveHighInput = input;
     restartNewSpeakerTimer();
-    if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+    if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
   }
 }
@@ -1825,7 +1684,7 @@ async function makeCameraSwitch(input, average) {
 // function to actually switch the camera input when in presentertrack Q&A mode
 async function presenterQASwitch(input, sourceDict) {
 
-  if (!(PRESENTER_QA_AUDIENCE_MIC_IDS.includes(input))) {
+  if (!(CONF.PRESENTER_QA_AUDIENCE_MIC_IDS.includes(input))) {
     // Once the presenter starts talkin, we need to initiate composition timer
     // to remove composition only after the configured time has passed.
     restartCompositionTimer();
@@ -1854,7 +1713,7 @@ async function presenterQASwitch(input, sourceDict) {
   }
 
   // send required messages to secondary codec that also turns on speakertrack over there
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
 
   lastActiveHighInput = input;
   restartNewSpeakerTimer();
@@ -1879,10 +1738,10 @@ function setComposedQAVideoSource(connectorDict) {
   }, 250) //250ms delay to allow the main source to resolve first
 
   // only disable background mode if the audience camera is a QuadCam
-  if (connectorDict.ConnectorId[1] == QUAD_CAM_ID) resumeSpeakerTrack();
+  if (connectorDict.ConnectorId[1] == CONF.QUAD_CAM_ID) resumeSpeakerTrack();
 
   //if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Unmute();
-  if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
 }
 
@@ -1892,26 +1751,26 @@ function largestMicValue() {
   let currentMaxKey = '';
   let theAverage = 0;
 
-  for (var i in config.monitorMics) {
-    theAverage = averageArray(micArrays[config.monitorMics[i].toString()]);
+  for (var i in CONF.config.monitorMics) {
+    theAverage = averageArray(micArrays[CONF.config.monitorMics[i].toString()]);
     if (theAverage >= currentMaxValue) {
-      currentMaxKey = config.monitorMics[i].toString();
+      currentMaxKey = CONF.config.monitorMics[i].toString();
       currentMaxValue = theAverage;
     }
   }
 
-  for (var i in config.ethernetMics) {
-    theAverage = averageArray(micArrays[config.ethernetMics[i].toString()]);
+  for (var i in CONF.config.ethernetMics) {
+    theAverage = averageArray(micArrays[CONF.config.ethernetMics[i].toString()]);
     if (theAverage >= currentMaxValue) {
-      currentMaxKey = config.ethernetMics[i].toString();
+      currentMaxKey = CONF.config.ethernetMics[i].toString();
       currentMaxValue = theAverage;
     }
   }
 
-  for (var i in config.usbMics) {
-    theAverage = averageArray(micArrays[config.usbMics[i].toString()]);
+  for (var i in CONF.config.usbMics) {
+    theAverage = averageArray(micArrays[CONF.config.usbMics[i].toString()]);
     if (theAverage >= currentMaxValue) {
-      currentMaxKey = config.usbMics[i].toString();
+      currentMaxKey = CONF.config.usbMics[i].toString();
       currentMaxValue = theAverage;
     }
   }
@@ -1949,7 +1808,7 @@ async function recallSideBySideMode() {
           //console.log("Trying to use this for connector dict in recallSideBySideMode(): ", sourceDict  )
           //xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
 
-          config.compositions.forEach(compose => {
+          CONF.config.compositions.forEach(compose => {
             if (compose.mics.includes(0)) {
               console.log(`SideBySide setting to composition = ${compose.name}`);
               if (compose.preset != 0) {
@@ -1992,7 +1851,7 @@ async function recallSideBySideMode() {
       }
       else {
         let sourceDict = { SourceID: '0' };
-        sourceDict["SourceID"] = OVERVIEW_SINGLE_SOURCE_ID.toString();
+        sourceDict["SourceID"] = CONF.OVERVIEW_SINGLE_SOURCE_ID.toString();
         console.log("Trying to use this for source dict in recallSideBySideMode(): ", sourceDict)
         xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
         lastSourceDict = sourceDict;
@@ -2002,14 +1861,14 @@ async function recallSideBySideMode() {
 
 
       // send side_by_side message to secondary codecs if in combined mode
-      if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY && roomCombined) {
+      if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY && roomCombined) {
         await sendIntercodecMessage('side_by_side');
       }
 
       lastActiveHighInput = 0;
       lowWasRecalled = true;
     }
-    if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+    if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   }
 }
 
@@ -2026,7 +1885,7 @@ async function recallFullPresenter() {
   let connectorDict = { ConnectorId: presenterSource };
   xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict = connectorDict;
-  if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   //resumeSpeakerTrack(); // we do not want to leave background mode on
 }
 
@@ -2034,12 +1893,12 @@ async function recallQuadCam() {
   console.log("Recalling QuadCam after manually exiting PresenterTrack mode....")
   pauseSpeakerTrack();
   if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
-  //let currentSTCameraID = QUAD_CAM_ID; 
+  //let currentSTCameraID = CONF.QUAD_CAM_ID; 
   let currentSTCameraID = await xapi.Status.Cameras.SpeakerTrack.ActiveConnector.get(); //TODO: Test if it obtains the correct camera ID
   console.log('In recallQuadCam Obtained currentSTCameraID as: ', currentSTCameraID)
   let connectorDict = { SourceId: currentSTCameraID }; xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict = connectorDict;
-  if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   resumeSpeakerTrack(); // we do not want to leave background mode on
 
 
@@ -2087,7 +1946,7 @@ function addCustomAutoQAPanel() {
   let presenterTrackRowValue = (presenterTrackConfigured) ? presenterTrackButtons : presenterTrackButtonsDisabled;
 
   // add custom control panel for turning on/off automatic mode
-  if (ALLOW_PRESENTER_QA_MODE) {
+  if (CONF.ALLOW_PRESENTER_QA_MODE) {
     xapi.Command.UserInterface.Extensions.Panel.Save({ PanelId: 'panel_auto_qa' },
       `<Extensions>
       <Version>1.9</Version>
@@ -2111,7 +1970,7 @@ function addCustomAutoQAPanel() {
       `);
   } else xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_auto_qa' });
 
-  if (presenterTrackConfigured && ALLOW_PRESENTER_QA_MODE) {
+  if (presenterTrackConfigured && CONF.ALLOW_PRESENTER_QA_MODE) {
     xapi.command('UserInterface Extensions Widget SetValue', { WidgetId: 'widget_pt_settings', Value: '1' }).catch(handleMissingWigetError);
   }
 
@@ -2140,248 +1999,319 @@ async function updateUSBModeConfig() {
 /////////////////////////////////////////////////////////////////////////////////////////
 GMM.Event.Receiver.on(async event => {
   const usb_mode_reg = /USB_Mode_Version_[0-9]*.*/gm
-  if (event.Source.Id == 'localhost') {
-    // we are evaluating a local event, first check to see if from the USB Mode macro
-    if (usb_mode_reg.test(event.App)) {
-      if (event.Type == 'Error') {
-        console.error(event)
-      } else {
-        switch (event.Value) {
-          case 'Initialized':
-            console.warn(`USB mode initialized...`)
-            updateUSBModeConfig();
-            break;
-          case 'EnteringWebexMode': case 'Entering_Default_Mode': case 'EnteringDefaultMode':
-            console.warn(`You are entering Webex Mode`)
-            //Run code here when Default Mode starts to configure
-            break;
-          case 'WebexModeStarted': case 'DefaultModeStarted':
-            console.warn(`System is in Default Mode`)
-            stopAutomation();
-            usb_mode = false;
-            // always tell the other codec when your are in or out of a call
-            await sendIntercodecMessage('CALL_DISCONNECTED');
-            if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-              // only need to keep track of codecs being in call with these
-              // booleans in primary codec which is the one that initiates join/split
-              primaryInCall = false;
-              evalCustomPanels();
-              handleExternalController('PRIMARY_CALLDISCONNECT');
-            } else {
-              handleExternalController('SECONDARY_CALLDISCONNECT');
+  if ('RawMessage' in event) {
+    // here we are receiving a RawMessage as marked by GMM, so it could be from an external controller
+    //first check to ese if it is a custom MIC_ACTIVE Event
+    let theEventValue = event.RawMessage;
+    let activeMic = '';
+    if (theEventValue.slice(0, 11) == 'MIC_ACTIVE_') {
+      console.warn("Received unformatted MIC_ACTIVE_XX message: ", event.RawMessage)
+      activeMic = theEventValue.substring(11);
+      processExternalMicHandler(activeMic);
+    } else console.warn(`Did not process received raw message: ${event.RawMessage}`)
 
-            }
-            break;
-          case 'enteringUSBMode':
-            console.warn(`You are entering USB Mode`)
-            //Run code here when USB Mode starts to configure
-            break;
-          case 'USBModeStarted':
-            console.warn(`System is in Default Mode`)
-            startAutomation();
-            usb_mode = true;
-            // always tell the other codec when your are in or out of a call
-            await sendIntercodecMessage('CALL_CONNECTED');
-            if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-              // only need to keep track of codecs being in call with these
-              // booleans in primary codec which is the one that initiates join/split
-              primaryInCall = true;
-              evalCustomPanels();
-              handleExternalController('PRIMARY_CALLCONNECT');
-            } else {
-              handleExternalController('SECONDARY_CALLCONNECT');
-            }
-            break;
-          default:
-            break;
-        }
-      }
-    }
-    else {
-      console.debug({
-        Message: `Received Message from ${event.App} and was not processed`
-      })
-    }
   }
-  else { // This section is for handling messages sent from primary to secondary codec and vice versa
-    switch (event.App) { //Based on the App (Macro Name), I'll run some code
-      case 'divisible_room':
-        console.warn("Received from other codec: ", event.Value)
+  else
+    if (event.Source.Id == 'localhost') {
+      if (usb_mode_reg.test(event.App)) {// we are evaluating a local event, first check to see if from the USB Mode macro
         if (event.Type == 'Error') {
           console.error(event)
         } else {
           switch (event.Value) {
-            case 'VTC-1_OK':
-              handleCodecOnline(event.Source?.IPv4);
+            case 'Initialized':
+              console.warn(`USB mode initialized...`)
+              updateUSBModeConfig();
               break;
-            case 'VTC-1_status':
-              handleMacroStatusResponse();
+            case 'EnteringWebexMode': case 'Entering_Default_Mode': case 'EnteringDefaultMode':
+              console.warn(`You are entering Webex Mode`)
+              //Run code here when Default Mode starts to configure
               break;
-            case 'VTC_KA_OK':
-              priHandleKeepAliveResponse(event.Source?.IPv4);
-              break;
-            case 'VTC_KA_req':
-              secSendKeepAliveResponse();
-              break;
-
-            case 'side_by_side':
-              if (roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY)) {
-                console.log('Handling side by side on secondary');
-                deactivateSpeakerTrack();
-                xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
-              }
-              break;
-            case 'automatic_mode':
-              if (roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY)) {
-                // handle request to keep speakertrack on from primary to secondary
-                console.log('Turning back on SpeakerTrack on secondary');
-                activateSpeakerTrack();
-              }
-              break;
-            case 'CALL_CONNECTED':
-              if (roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY)) {
-                // if we are the secondary codec, this event came from primary
-                // If primary is in a call, we need to turn on vuMeters just to make sure the mute LEDs show
-                // start VuMeter monitoring
-                console.log("Turning on VuMeter monitoring...")
-                for (var i in config.monitorMics) {
-                  xapi.command('Audio VuMeter Start', {
-                    ConnectorId: config.monitorMics[i],
-                    ConnectorType: 'Microphone',
-                    IntervalMs: 500,
-                    Source: 'AfterAEC'
-                  });
-                }
-              }
-              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-                // if we are the primary codec, this event came from secondary
-                // we need to keep track when secondary room is in a call 
-                // in a variable in the primary to not join or combine
-                // while in that state
-                console.log("Secondary in call, setting variable...")
-                //secondaryInCall=true;  
-                if (event.Source.IPv4 in secondariesStatus)
-                  secondariesStatus[event.Source.IPv4].inCall = true;
-                else
-                  console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
-
+            case 'WebexModeStarted': case 'DefaultModeStarted':
+              console.warn(`System is in Default Mode`)
+              stopAutomation();
+              usb_mode = false;
+              // always tell the other codec when your are in or out of a call
+              await sendIntercodecMessage('CALL_DISCONNECTED');
+              if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+                // only need to keep track of codecs being in call with these
+                // booleans in primary codec which is the one that initiates join/split
+                primaryInCall = false;
                 evalCustomPanels();
-              }
+                handleExternalController('PRIMARY_CALLDISCONNECT');
+              } else {
+                handleExternalController('SECONDARY_CALLDISCONNECT');
 
-              break;
-            case 'CALL_DISCONNECTED':
-              if (roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY)) {
-                // Turn vuMeters back off
-                console.log("Stopping all VuMeters...");
-                xapi.Command.Audio.VuMeter.StopAll({});
               }
-              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-                // if we are the primary codec, this event came from secondary
-                // we need to keep track when secondary room is no longer in a call 
-                // in a variable in the primary to allow join or combine
-                // while in that state
-                console.log("Secondary not in call, setting variable...")
-                //secondaryInCall=false;
-                if (event.Source.IPv4 in secondariesStatus)
-                  secondariesStatus[event.Source.IPv4].inCall = false;
-                else
-                  console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
-
+              break;
+            case 'enteringUSBMode':
+              console.warn(`You are entering USB Mode`)
+              //Run code here when USB Mode starts to configure
+              break;
+            case 'USBModeStarted':
+              console.warn(`System is in Default Mode`)
+              startAutomation();
+              usb_mode = true;
+              // always tell the other codec when your are in or out of a call
+              await sendIntercodecMessage('CALL_CONNECTED');
+              if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+                // only need to keep track of codecs being in call with these
+                // booleans in primary codec which is the one that initiates join/split
+                primaryInCall = true;
                 evalCustomPanels();
+                handleExternalController('PRIMARY_CALLCONNECT');
+              } else {
+                handleExternalController('SECONDARY_CALLCONNECT');
               }
               break;
-            case 'PRESENTATION_PREVIEW_STARTED':
-              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-                // if we are the primary codec, this event came from secondary
-                // we need to keep track when secondary room is in presentation preview 
-                // in a variable in the primary to not join or combine
-                // while in that state
-                console.log("Secondary in presentation preview, setting variable...")
-                if (event.Source.IPv4 in secondariesStatus)
-                  secondariesStatus[event.Source.IPv4].inPreview = true;
-                else
-                  console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
-                evalCustomPanels();
-              }
-              break;
-            case 'PRESENTATION_PREVIEW_STOPPED':
-              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
-                // if we are the primary codec, this event came from secondary
-                // we need to keep track when secondary room is in presentation preview 
-                // in a variable in the primary to not join or combine
-                // while in that state
-                console.log("Secondary in no longer in preview, setting variable...")
-                if (event.Source.IPv4 in secondariesStatus)
-                  secondariesStatus[event.Source.IPv4].inPreview = false;
-                else
-                  console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
-                evalCustomPanels();
-              }
-              break;
-            case 'COMBINE':
-              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && secondarySelected) {
-                setCombinedMode(true); // Stores status to permanent storage
-                displayWarning();
-                console.log('Secondary received command to combine');
-                secondaryCombinedMode();
-              }
-              break;
-            case 'DIVIDE':
-              if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && secondarySelected) {
-                setCombinedMode(false); // Stores status to permanent storage
-                removeWarning();
-                console.log('Secondary received command to divide');
-                secondaryStandaloneMode();
-              }
-              break;
-            case 'SEC_SELECTED':
-              secondarySelected = true;
-              await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
-                console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
-              })
-              await sendIntercodecMessage('SEC_SELECTED_ACK')
-              break;
-            case 'SEC_REMOVED':
-              secondarySelected = false;
-              await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
-                console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
-              })
-              await sendIntercodecMessage('SEC_REMOVED_ACK')
-              break;
-            case 'SEC_SELECTED_ACK':
-              processSecSelectedAck(event.Source?.IPv4);
-              break;
-            case 'SEC_REMOVED_ACK':
-              processSecUnselectedAck(event.Source?.IPv4);
-              break;
-            case 'MUTE':
-              xapi.command('Audio Microphones Mute');
-              break;
-            case 'UNMUTE':
-              xapi.command('Audio Microphones Unmute');
-              break;
-            case 'STANDBY_ON':
-              xapi.command('Standby Activate');
-              break;
-            case 'STANDBY_OFF':
-              xapi.command('Standby Deactivate');
-              break;
-            case 'STANDBY_HALFWAKE':
-              xapi.command('Standby Halfwake');
-              break;
-
             default:
               break;
           }
         }
-        break;
-
-      default:
-        console.warn(`Received Message ${event.Value} from macro ${event.App} on remote codec but was not processed... rename macro to divisible_room if intended to work with this one.`)
-        break;
+      }
+      else {
+        console.debug({
+          Message: `Received Message from ${event.App} and was not processed`
+        })
+      }
     }
+    else { // This section is for handling messages sent from primary to secondary codec and vice versa
+      // and for messages from Aux to either Primary or Secondary in same room
+      switch (event.App) { //Based on the App (Macro Name), I'll run some code
+        case 'aux_codec':
+          console.warn("Received from aux codec: ", event.Value)
+          if (event.Type == 'Error') {
+            console.error(event)
+          } else {
+            switch (event.Value) {
+              case 'VTC-1_OK':
+                handleCodecOnlineAux(event.Source?.IPv4);
+                break;
+              case 'VTC-1_status':
+                handleMacroStatusResponseAux();
+                break;
+              case "aux_has_people":
+                handleCodecPeopleReportAux(event.Source?.IPv4, true)
+                break;
+              case "aux_no_people":
+                handleCodecPeopleReportAux(event.Source?.IPv4, false)
+                break;
+              default:
+                break;
+            }
+          }
+        case 'divisible_room':
+          console.warn("Received from other codec: ", event.Value)
+          if (event.Type == 'Error') {
+            console.error(event)
+          } else {
+            switch (event.Value) {
+              case 'VTC-1_OK':
+                handleCodecOnline(event.Source?.IPv4);
+                break;
+              case 'VTC-1_status':
+                handleMacroStatusResponse();
+                break;
+              case 'VTC_KA_OK':
+                priHandleKeepAliveResponse(event.Source?.IPv4);
+                break;
+              case 'VTC_KA_req':
+                secSendKeepAliveResponse();
+                break;
 
-  }
+              case 'side_by_side':
+                if (roomCombined && (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY)) {
+                  console.log('Handling side by side on secondary');
+                  deactivateSpeakerTrack();
+                  xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
+                }
+                break;
+              case 'automatic_mode':
+                if (roomCombined && (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY)) {
+                  // handle request to keep speakertrack on from primary to secondary
+                  console.log('Turning back on SpeakerTrack on secondary');
+                  activateSpeakerTrack();
+                }
+                break;
+              case 'CALL_CONNECTED':
+                if (roomCombined && (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY)) {
+                  // if we are the secondary codec, this event came from primary
+
+                  if (CONF.SECONDARY_MULTI_CAM) {
+                    // If primary is in call, we now need to start automation since we need to be able to switch amongst local cameras and Aux codecs on the secondary 
+                    // as well when combined. This will turn out vumeters for the mute LEDs as well
+                    startAutomation();
+                  }
+                  else {
+                    // If primary is in a call, we need to turn on vuMeters just to make sure the mute LEDs show
+                    // start VuMeter monitoring
+                    console.log("Turning on VuMeter monitoring...")
+                    for (var i in CONF.config.monitorMics) {
+                      xapi.command('Audio VuMeter Start', {
+                        ConnectorId: CONF.config.monitorMics[i],
+                        ConnectorType: 'Microphone',
+                        IntervalMs: 500,
+                        Source: 'AfterAEC'
+                      });
+                    }
+                  }
+
+                }
+                if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+                  // if we are the primary codec, this event came from secondary
+                  // we need to keep track when secondary room is in a call 
+                  // in a variable in the primary to not join or combine
+                  // while in that state
+                  console.log("Secondary in call, setting variable...")
+                  //secondaryInCall=true;  
+                  if (event.Source.IPv4 in secondariesStatus)
+                    secondariesStatus[event.Source.IPv4].inCall = true;
+                  else
+                    console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+
+                  evalCustomPanels();
+                }
+
+                break;
+              case 'CALL_DISCONNECTED':
+                if (roomCombined && (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY)) {
+
+                  if (CONF.SECONDARY_MULTI_CAM) {
+                    // Now that we can switch among cameras and aux inputs on secondaries, 
+                    // we need to turn that off when the primary disconnects a call. 
+                    stopAutomation();
+                  }
+                  else {
+                    // Turn vuMeters back off
+                    console.log("Stopping all VuMeters...");
+                    xapi.Command.Audio.VuMeter.StopAll({});
+                  }
+
+                }
+                if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+                  // if we are the primary codec, this event came from secondary
+                  // we need to keep track when secondary room is no longer in a call 
+                  // in a variable in the primary to allow join or combine
+                  // while in that state
+                  console.log("Secondary not in call, setting variable...")
+                  //secondaryInCall=false;
+                  if (event.Source.IPv4 in secondariesStatus)
+                    secondariesStatus[event.Source.IPv4].inCall = false;
+                  else
+                    console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+
+                  evalCustomPanels();
+                }
+                break;
+              case 'PRESENTATION_PREVIEW_STARTED':
+                if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+                  // if we are the primary codec, this event came from secondary
+                  // we need to keep track when secondary room is in presentation preview 
+                  // in a variable in the primary to not join or combine
+                  // while in that state
+                  console.log("Secondary in presentation preview, setting variable...")
+                  if (event.Source.IPv4 in secondariesStatus)
+                    secondariesStatus[event.Source.IPv4].inPreview = true;
+                  else
+                    console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+                  evalCustomPanels();
+                }
+                break;
+              case 'PRESENTATION_PREVIEW_STOPPED':
+                if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+                  // if we are the primary codec, this event came from secondary
+                  // we need to keep track when secondary room is in presentation preview 
+                  // in a variable in the primary to not join or combine
+                  // while in that state
+                  console.log("Secondary in no longer in preview, setting variable...")
+                  if (event.Source.IPv4 in secondariesStatus)
+                    secondariesStatus[event.Source.IPv4].inPreview = false;
+                  else
+                    console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+                  evalCustomPanels();
+                }
+                break;
+              case 'COMBINE':
+                if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY && secondarySelected) {
+                  setCombinedMode(true); // Stores status to permanent storage
+                  displayWarning();
+                  console.log('Secondary received command to combine');
+                  secondaryCombinedMode();
+                }
+                break;
+              case 'DIVIDE':
+                if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY && secondarySelected) {
+                  setCombinedMode(false); // Stores status to permanent storage
+                  removeWarning();
+                  console.log('Secondary received command to divide');
+                  secondaryStandaloneMode();
+                }
+                break;
+              case 'SEC_SELECTED':
+                secondarySelected = true;
+                await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
+                  console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
+                })
+                await sendIntercodecMessage('SEC_SELECTED_ACK')
+                break;
+              case 'SEC_REMOVED':
+                secondarySelected = false;
+                await GMM.write.global('JoinSplit_secondarySelected', secondarySelected).then(() => {
+                  console.log({ Message: 'ChangeState', Action: 'Secondary selected status state stored.' })
+                })
+                await sendIntercodecMessage('SEC_REMOVED_ACK')
+                break;
+              case 'SEC_SELECTED_ACK':
+                processSecSelectedAck(event.Source?.IPv4);
+                break;
+              case 'SEC_REMOVED_ACK':
+                processSecUnselectedAck(event.Source?.IPv4);
+                break;
+              case 'MUTE':
+                xapi.command('Audio Microphones Mute');
+                break;
+              case 'UNMUTE':
+                xapi.command('Audio Microphones Unmute');
+                break;
+              case 'STANDBY_ON':
+                xapi.command('Standby Activate');
+                break;
+              case 'STANDBY_OFF':
+                xapi.command('Standby Deactivate');
+                break;
+              case 'STANDBY_HALFWAKE':
+                xapi.command('Standby Halfwake');
+                break;
+
+              default:
+                break;
+            }
+          }
+          break;
+        case 'Crestron':
+          console.warn("Received from app Crestron: ", event.Value)
+          if (event.Type == 'Error') {
+            console.error(event)
+          } else {
+            //first check to ese if it is a custom MIC_ACTIVE Event
+            let theEventValue = event.Value;
+            let activeMic = '';
+            if (theEventValue.slice(0, 11) == 'MIC_ACTIVE_') {
+              activeMic = theEventValue.substring(11);
+              processExternalMicHandler(activeMic);
+            }
+            else {
+              console.debug({
+                Message: `Received Message from ${event.App} was not processed`
+              })
+            }
+          }
+          break;
+        default:
+          console.warn(`Received Message ${event.Value} from macro ${event.App} on remote codec but was not processed... rename macro to divisible_room if intended to work with this one.`)
+          break;
+      }
+
+    }
 
 })
 
@@ -2391,18 +2321,23 @@ GMM.Event.Receiver.on(async event => {
 /////////////////////////////////////////////////////////////////////////////////////////
 
 async function sendIntercodecMessage(message) {
-  /*
-  for (const keyIP in otherCodec)
-    if (otherCodec[keyIP] != '') {
-      otherCodec[keyIP].status(message).passIP().queue().catch(e => {
-        console.log('Error sending message');
-      });
-    }
-    */
   await otherCodecs.status(message).passIP().queue().catch(e => {
     console.log('Error sending message');
   });
 }
+
+
+
+async function sendIntercodecMessageAux(message) {
+  // only send if there are aux codecs configured
+  if (Object.keys(auxCodecs).length != 0) {
+    console.log(`sendIntercodecMessage to all aux codecs: message = ${message}`);
+    await auxCodecs.status(message).passIP().queue().catch(e => {
+      alertFailedIntercodecComm("Error connecting to codec for second camera, please contact the Administrator");
+    });
+  }
+}
+
 
 async function sendSelectionMessage(secIP, message) {
   await otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
@@ -2431,7 +2366,7 @@ function handleExternalController(macroEvent) {
 
 xapi.Event.PresentationStarted.on(value => {
   console.log(value)
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY)
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY)
     handleExternalController('PRIMARY_PRESENTATION_STARTED');
   else
     handleExternalController('SECONDARY_PRESENTATION_STARTED');
@@ -2440,7 +2375,7 @@ xapi.Event.PresentationStarted.on(value => {
 
 xapi.Event.PresentationStopped.on(value => {
   console.log(value);
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY)
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY)
     handleExternalController('PRIMARY_PRESENTATION_STOPPED');
   else
     handleExternalController('SECONDARY_PRESENTATION_STOPPED');
@@ -2448,7 +2383,7 @@ xapi.Event.PresentationStopped.on(value => {
 
 xapi.Event.PresentationPreviewStopped.on(value => {
   console.log(value);
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY)
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY)
     handleExternalController('PRIMARY_PREVIEW_STOPPED');
   else
     handleExternalController('SECONDARY_PREVIEW_STOPPED');
@@ -2467,6 +2402,41 @@ function handleMicMuteOff() {
   //activateSpeakerTrack();
 }
 
+
+// function to check the satus of the macros running on the AUX codec
+async function handleMacroStatusAux() {
+  console.log('handleMacroStatusAux');
+
+  // reset tracker of responses from aux codecs
+  Object.entries(AUX_CODEC_STATUS).forEach(([key, val]) => {
+    val.online = false;
+  })
+  // send a status request to all AUX codecs 
+  await sendIntercodecMessageAux('VTC-1_status');
+}
+
+function handleCodecOnlineAux(codecIP) {
+  if (codecIP in AUX_CODEC_STATUS) {
+    if (AUX_CODEC_STATUS[codecIP].enable) {
+      console.log(`handleCodecOnlineAux: codec = ${codecIP}`);
+      AUX_CODEC_STATUS[codecIP].online = true;
+    }
+  }
+  else {
+    console.warn(`No codec with IP ${codecIP} configured when receiving online report.`)
+  }
+}
+
+function handleCodecPeopleReportAux(codecIP, seespeople) {
+  if (codecIP in AUX_CODEC_STATUS) {
+    if (AUX_CODEC_STATUS[codecIP].enable) {
+      console.log(`handleCodecPeopleReport: codec = ${codecIP} seespeople= ${seespeople}`);
+      AUX_CODEC_STATUS[codecIP].haspeople = seespeople
+    }
+  } else {
+    console.warn(`No codec with IP ${codecIP} configured when receiving people report.`)
+  }
+}
 
 
 // function to check the satus of the macros running on the secondary codecs
@@ -2492,14 +2462,40 @@ async function handleMacroStatusResponse() {
   await sendIntercodecMessage('VTC-1_OK');
 }
 
+
+async function handleWakeUpAux() {
+  console.log('handleWakeUpAux');
+
+  // send wakeup to AUX codec
+  await sendIntercodecMessageAux('wake_up');
+  // check the satus of the macros running on the AUX codec and store it in AUX_CODEC.online
+  // in case we need to check it in some other function
+  setTimeout(handleMacroStatusAux, 2000);
+}
+
+async function handleShutDownAux() {
+  console.log('handleShutDownAux');
+  // send required messages to other codecs
+  await sendIntercodecMessageAux('shut_down');
+}
+
+// Issue matrix command to keep sending the selected main video input to primary 
+// when codec is a secondary and is in combined mode
+xapi.Status.Video.Input.MainVideoSource.on(currentMainVideoSource => {
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY && roomCombined) {
+    console.log(`New main video source in secondary while combined: ${currentMainVideoSource}, matrixing out to video tieline to primary`);
+    xapi.command('Video Matrix Assign', { Output: CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: currentMainVideoSource }).catch((error) => { console.error(error); });
+  }
+});
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // VARIOUS TIMER HANDLER FUNCTIONS
 /////////////////////////////////////////////////////////////////////////////////////////
 
 function startSideBySideTimer() {
-  if (sideBySideTimer == null) {
+  if (sideBySideTimer == null && CONF.SIDE_BY_SIDE_TIME > 0) {
     allowSideBySide = false;
-    sideBySideTimer = setTimeout(onSideBySideTimerExpired, SIDE_BY_SIDE_TIME);
+    sideBySideTimer = setTimeout(onSideBySideTimerExpired, CONF.SIDE_BY_SIDE_TIME);
   }
 }
 
@@ -2526,7 +2522,7 @@ function onSideBySideTimerExpired() {
 function startInitialCallTimer() {
   if (InitialCallTimer == null) {
     allowCameraSwitching = false;
-    InitialCallTimer = setTimeout(onInitialCallTimerExpired, INITIAL_CALL_TIME);
+    InitialCallTimer = setTimeout(onInitialCallTimerExpired, CONF.INITIAL_CALL_TIME);
   }
 }
 
@@ -2549,7 +2545,7 @@ function stopInitialCallTimer() {
 function startCompositionTimer() {
   if (qaCompositionTimer == null) {
     presenterQAKeepComposition = true;
-    qaCompositionTimer = setTimeout(onCompositionTimerExpired, PRESENTER_QA_KEEP_COMPOSITION_TIME)
+    qaCompositionTimer = setTimeout(onCompositionTimerExpired, CONF.PRESENTER_QA_KEEP_COMPOSITION_TIME)
   }
 }
 
@@ -2568,7 +2564,7 @@ function restartCompositionTimer() {
 function onCompositionTimerExpired() {
   presenterQAKeepComposition = false;
   if (PRESENTER_QA_MODE && !webrtc_mode && (presenterTracking && presenterDetected)) {
-    if (!PRESENTER_QA_AUDIENCE_MIC_IDS.includes(lastActiveHighInput)) {
+    if (!CONF.PRESENTER_QA_AUDIENCE_MIC_IDS.includes(lastActiveHighInput)) {
       // restore single presentertrackview because the person still speaking
       // is not an audience member and the timer has expired (could also be due to silence)
       recallFullPresenter();
@@ -2579,7 +2575,7 @@ function onCompositionTimerExpired() {
 function startNewSpeakerTimer() {
   if (newSpeakerTimer == null) {
     allowNewSpeaker = false;
-    newSpeakerTimer = setTimeout(onNewSpeakerTimerExpired, NEW_SPEAKER_TIME);
+    newSpeakerTimer = setTimeout(onNewSpeakerTimerExpired, CONF.NEW_SPEAKER_TIME);
   }
 }
 
@@ -2668,13 +2664,13 @@ function evalPresenterTrack(value) {
 
 function evalCustomPanels() {
 
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
     if (primaryInCall || primaryInPreview) {
       xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_combine_split' });
       xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'room_combine_PIN' });
     } else {
       // Add CUSTOM PANEL
-      if (USE_WALL_SENSOR) {
+      if (CONF.USE_WALL_SENSOR) {
         //first remove the full toggle custom panel if already there
         xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_combine_split' });
         //then create the PIN based custom panel
@@ -2724,16 +2720,6 @@ async function init_switching() {
     }
   });
 
-  /*
-  // register event handlers for local events
-  xapi.Status.Standby.State.on(value => {
-    console.log(value);
-    if (roomCombined) {
-      if (value == "Off") handleWakeUp();
-      if (value == "Standby") handleShutDown();
-    }
-  });
-*/
 
   // register handler for Call Successful
   xapi.Event.CallSuccessful.on(async () => {
@@ -2746,7 +2732,7 @@ async function init_switching() {
 
     // always tell the other codec when your are in or out of a call
     await sendIntercodecMessage('CALL_CONNECTED');
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
       // only need to keep track of codecs being in call with these
       // booleans in primary codec which is the one that initiates join/split
       primaryInCall = true;
@@ -2769,7 +2755,7 @@ async function init_switching() {
 
     // always tell the other codec when your are in or out of a call
     await sendIntercodecMessage('CALL_DISCONNECTED');
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
       // only need to keep track of codecs being in call with these
       // booleans in primary codec which is the one that initiates join/split
       primaryInCall = false;
@@ -2784,7 +2770,7 @@ async function init_switching() {
   xapi.Event.PresentationPreviewStarted
     .on(async value => {
       await sendIntercodecMessage('PRESENTATION_PREVIEW_STARTED');
-      if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+      if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
         // only need to keep track of codecs being in call with these
         // booleans in primary codec which is the one that initiates join/split
         primaryInPreview = true;
@@ -2799,7 +2785,7 @@ async function init_switching() {
   xapi.Event.PresentationPreviewStopped
     .on(async value => {
       await sendIntercodecMessage('PRESENTATION_PREVIEW_STOPPED');
-      if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+      if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
         // only need to keep track of codecs being in call with these
         // booleans in primary codec which is the one that initiates join/split
         primaryInPreview = false;
@@ -2823,7 +2809,7 @@ async function init_switching() {
 
         // always tell the other codec when your are in or out of a call
         await sendIntercodecMessage('CALL_CONNECTED');
-        if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+        if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
           primaryInCall = true;
@@ -2842,7 +2828,7 @@ async function init_switching() {
         }
         // always tell the other codec when your are in or out of a call
         await sendIntercodecMessage('CALL_DISCONNECTED');
-        if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+        if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
           primaryInCall = false;
@@ -2911,12 +2897,12 @@ async function init_switching() {
 
   // first check to see if the room is supposed to be in combined mode as per permanent storage
   if (roomCombined) {
-    if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
       overviewShowDouble = true;
       let thePresetCamID = await getPresetCamera(30);
 
     }
-    else if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY) {
+    else if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY) {
       // stop automation in case it was on
       stopAutomation();
     }
@@ -2924,7 +2910,7 @@ async function init_switching() {
 
 
 
-  // Stop any VuMeters that might have been left from a previous macro run with a different config.monitorMics constant
+  // Stop any VuMeters that might have been left from a previous macro run with a different CONF.config.monitorMics constant
   // to prevent errors due to unhandled vuMeter events.
   xapi.Command.Audio.VuMeter.StopAll({});
   let enabledGet = await xapi.Config.Cameras.PresenterTrack.Enabled.get()
@@ -2938,18 +2924,22 @@ async function init_switching() {
 
 async function init() {
   console.log('init');
+
+  await checkAltconfig(); //switch to alternative configuration if present and selected as such in JoinSplit_alt_config
+
+
   if (!await validate_config()) disableMacro("invalid config")
 
   // make sure Preset 30 exists, if not create it with just an overview shot of camera ID 1 which should be the QuadCam
   checkOverviewPreset();
 
-  await GMM.memoryInit();
+  //await GMM.memoryInit();
 
-  await GMM.write.global('JOIN_SPLIT_CONFIG', JOIN_SPLIT_CONFIG).then(() => {
+  await GMM.write.global('JOIN_SPLIT_CONFIG', CONF.JOIN_SPLIT_CONFIG).then(() => {
     console.log({ Message: 'Init', Action: 'Join Split config stored.' })
   });
 
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
     roomCombined = await GMM.read.global('JoinSplit_combinedState').catch(async e => {
       //console.error(e);
       console.log("No initial JoinSplit_combinedState global detected, creating one...")
@@ -2959,7 +2949,7 @@ async function init() {
       return false;
     })
   } else { // Here for when in secondary codec
-    if (!USE_GPIO_INTERCODEC) { // When not using GPIO cable, we have to rely on permanent storage value in secondary as well
+    if (!CONF.USE_GPIO_INTERCODEC) { // When not using GPIO cable, we have to rely on permanent storage value in secondary as well
       roomCombined = await GMM.read.global('JoinSplit_combinedState').catch(async e => {
         //console.error(e);
         console.log("No initial JoinSplit_combinedState global detected, creating one...")
@@ -2997,7 +2987,7 @@ async function init() {
         usb_mode = true;
         // always tell the other codec when your are in or out of a call
         await sendIntercodecMessage('CALL_CONNECTED');
-        if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+        if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
           primaryInCall = true;
@@ -3012,7 +3002,7 @@ async function init() {
         usb_mode = false;
         // always tell the other codec when your are in or out of a call
         await sendIntercodecMessage('CALL_DISCONNECTED');
-        if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_PRIMARY) {
+        if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
           // only need to keep track of codecs being in call with these
           // booleans in primary codec which is the one that initiates join/split
           primaryInCall = false;
@@ -3024,9 +3014,9 @@ async function init() {
     });
   }
 
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
 
-    if (USE_WALL_SENSOR) {
+    if (CONF.USE_WALL_SENSOR) {
       wallSensorOverride = await GMM.read.global('JoinSplit_wallSensorOverride').catch(async e => {
         //console.error(e);
         console.log("No initial JoinSplit_wallSensorOverride global detected, creating one...")
@@ -3065,14 +3055,14 @@ async function init() {
     initialCombinedJoinState();
 
     // start listening to events on GPIO pin 1 that come from the wall sensor connected to PRIMARY
-    if (USE_WALL_SENSOR) primaryInitPartitionSensor();
+    if (CONF.USE_WALL_SENSOR) primaryInitPartitionSensor();
 
     //setTimeout(setPrimaryGPIOconfig, 1000);
     //primaryStandaloneMode();
 
     // start sensing changes in PIN 4 to switch room modes. This can be set by wall sensor
     // or custom touch10 UI on PRIMARY codec
-    if (USE_GPIO_INTERCODEC) primaryInitModeChangeSensing();
+    if (CONF.USE_GPIO_INTERCODEC) primaryInitModeChangeSensing();
 
     primaryListenToStandby();
     primaryListenToMute();
@@ -3086,14 +3076,14 @@ async function init() {
     setSecondaryDefaultConfig();
     // start sensing changes in PIN 4 to switch room modes. This can be set by wall sensor
     // or custom touch10 UI on PRIMARY codec
-    if (USE_GPIO_INTERCODEC) {
+    if (CONF.USE_GPIO_INTERCODEC) {
       secondaryInitModeChangeSensing();
       secondaryStandbyControl();
       secondaryMuteControl();
     }
     secondaryListenToStandby();
     checkCombinedStateSecondary();
-    if (!USE_GPIO_INTERCODEC) {
+    if (!CONF.USE_GPIO_INTERCODEC) {
       // since we are in secondary codec and in split configuration, we need to 
       // prepare to do basic switching to support PresenterTrack QA mode. 
       // we are only doing it here if no GPIO cable is being used, otherwised it gets
@@ -3208,11 +3198,11 @@ async function handleWidgetActions(event) {
       }
       else { // we can now safely split/combine
         if (event.Value === 'on') {
-          if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
+          if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
 
         }
         else if (event.Value === 'off') {
-          if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
+          if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
         }
       }
       break;
@@ -3276,7 +3266,7 @@ async function handleWidgetActions(event) {
               connectorDict = { ConnectorId: presenterSource };
               xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
               lastSourceDict = connectorDict;
-              if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+              if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
               xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });
               PRESENTER_QA_MODE = false;
               break;
@@ -3293,7 +3283,7 @@ async function handleWidgetActions(event) {
               lastSourceDict = connectorDict;
               xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });
               pauseSpeakerTrack();
-              if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+              if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
               PRESENTER_QA_MODE = true;
               //resumeSpeakerTrack();
@@ -3331,7 +3321,7 @@ xapi.event.on('UserInterface Extensions Panel Clicked', (event) => {
     case 'panel_combine_split':
       console.log('Room Combine/Split panel invoked...');
       handleMacroStatus();
-      if (COMBINE_CONTROL_PIN != '') {
+      if (CONF.COMBINE_CONTROL_PIN != '') {
         xapi.command("UserInterface Message TextInput Display",
           {
             Title: "Room Combine Control",
@@ -3384,9 +3374,9 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
       }
       else {
         switch (event.Text) {
-          case COMBINE_PIN:
-            if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
-              if (USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
+          case CONF.COMBINE_PIN:
+            if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
+              if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToLow(); else primaryTriggerCombine();
               setCombinedMode(true);
               // once they manually set the combined/join state, we must 
               // store the override state in persistent memory
@@ -3394,9 +3384,9 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
             }
             break;
 
-          case SPLIT_PIN:
-            if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
-              if (USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
+          case CONF.SPLIT_PIN:
+            if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
+              if (CONF.USE_GPIO_INTERCODEC) setGPIOPin4ToHigh(); else primaryTriggerDivide();
               setCombinedMode(false);
               // once they manually set the combined/join state, we must 
               // store the override state in persistent memory
@@ -3404,8 +3394,8 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
             }
             break;
 
-          case FIXED_SENSOR:
-            if (JOIN_SPLIT_CONFIG.ROOM_ROLE === JS_PRIMARY) {
+          case CONF.FIXED_SENSOR:
+            if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE === CONF.JS_PRIMARY) {
               // once a broken sensor is reported fixed, just set 
               //  the override state in persistent memory to false
               // must then manually open/close sensor to set room to right state
@@ -3423,7 +3413,7 @@ xapi.event.on('UserInterface Message TextInput Response', (event) => {
         }
       }
     case 'combineControl':
-      if (event.Text == COMBINE_CONTROL_PIN) {
+      if (event.Text == CONF.COMBINE_CONTROL_PIN) {
         console.log('Correct pin for combine/split panel entered...')
       }
       else {
@@ -3508,10 +3498,10 @@ function primaryListenToMute() {
     console.log("Global Mute: " + value);
     if (roomCombined === true) {
       if (value === 'On') {
-        if (USE_GPIO_INTERCODEC) setGPIOPin2ToLow(); else await sendIntercodecMessage("MUTE");
+        if (CONF.USE_GPIO_INTERCODEC) setGPIOPin2ToLow(); else await sendIntercodecMessage("MUTE");
       }
       else if (value === 'Off') {
-        if (USE_GPIO_INTERCODEC) setGPIOPin2ToHigh(); else await sendIntercodecMessage("UNMUTE");
+        if (CONF.USE_GPIO_INTERCODEC) setGPIOPin2ToHigh(); else await sendIntercodecMessage("UNMUTE");
       }
     }
   });
@@ -3522,20 +3512,22 @@ function primaryListenToStandby() {
     console.log("Standby State: " + state);
     if (state === 'Standby') {
       if (roomCombined === true) {
-        if (USE_GPIO_INTERCODEC) setGPIOPin3ToLow(); else await sendIntercodecMessage("STANDBY_ON");
+        if (CONF.USE_GPIO_INTERCODEC) setGPIOPin3ToLow(); else await sendIntercodecMessage("STANDBY_ON");
       }
+      handleShutDownAux();
     }
     else if (state === 'Off') {
       // Need to turn off automation when coming out of standby since that seems to turn back on
       // speakertrack which in turn turns on automation
       stopAutomation();
       if (roomCombined === true) {
-        if (USE_GPIO_INTERCODEC) setGPIOPin3ToHigh(); else await sendIntercodecMessage("STANDBY_OFF");
+        if (CONF.USE_GPIO_INTERCODEC) setGPIOPin3ToHigh(); else await sendIntercodecMessage("STANDBY_OFF");
       }
+      handleWakeUpAux();
     }
     else if (state === 'Halfwake') {
       if (roomCombined === true) {
-        if (!USE_GPIO_INTERCODEC) await sendIntercodecMessage("STANDBY_HALFWAKE");
+        if (!CONF.USE_GPIO_INTERCODEC) await sendIntercodecMessage("STANDBY_HALFWAKE");
       }
     }
 
@@ -3588,18 +3580,23 @@ const areSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(
 async function primaryCombinedMode() {
   handleExternalController('PRIMARY_COMBINE');
 
-  if (PRIMARY_COMBINED_VOLUME_COMBINED != 0) xapi.Command.Audio.Volume.Set({ Level: PRIMARY_COMBINED_VOLUME_COMBINED });
+  removeWarning();
+  xapi.command('Conference DoNotDisturb Deactivate').catch((error) => { console.error(error); });
+  xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90" + error); });
+
+  if (CONF.PRIMARY_COMBINED_VOLUME_COMBINED != 0) xapi.Command.Audio.Volume.Set({ Level: CONF.PRIMARY_COMBINED_VOLUME_COMBINED });
 
 
   //Only turn on mics for selected secondaries
-  config.compositions.forEach(compose => {
-    if (compose.source == JS_SECONDARY) {
+  CONF.config.compositions.forEach(compose => {
+    if (compose.source == CONF.JS_SECONDARY) {
       if (compose.codecIP in secondariesStatus)
         if (secondariesStatus[compose.codecIP].selected)
           compose.mics.forEach(micId => {
             // THIS IS THE INPUT FOR THE MICROPHONES FROM THE SECONDARY CODEC
-            xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'On')
-              .catch((error) => { console.error(error); });
+            if (micId > 1 && micId <= 8)
+              xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'On')
+                .catch((error) => { console.error(error); });
           })
     }
   })
@@ -3614,11 +3611,11 @@ async function primaryCombinedMode() {
 
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); });
 
-  if (USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
+  if (CONF.USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
 
     let secondariesSelected = new Set();
-    config.compositions.forEach(compose => {
-      if (compose.source == JS_SECONDARY) {
+    CONF.config.compositions.forEach(compose => {
+      if (compose.source == CONF.JS_SECONDARY) {
         if (secondariesStatus[compose.codecIP].selected) {
           secondariesSelected.add(compose.name)
         }
@@ -3626,7 +3623,7 @@ async function primaryCombinedMode() {
     })
 
     let combinedPTSettings = {}
-    Object.entries(N_COMBINED_PRESENTERTRACK_SETTINGS).forEach(([key, ptCameraSettings]) => {
+    Object.entries(CONF.N_COMBINED_PRESENTERTRACK_SETTINGS).forEach(([key, ptCameraSettings]) => {
       let compNamesSet = new Set();
       let myArray = key.split(':')
       myArray.forEach(elem => { compNamesSet.add(elem) })
@@ -3662,13 +3659,14 @@ async function primaryStandaloneMode() {
 
   handleExternalController('PRIMARY_SPLIT');
 
-  if (PRIMARY_COMBINED_VOLUME_STANDALONE != 0) xapi.Command.Audio.Volume.Set({ Level: PRIMARY_COMBINED_VOLUME_STANDALONE });
+  if (CONF.PRIMARY_COMBINED_VOLUME_STANDALONE != 0) xapi.Command.Audio.Volume.Set({ Level: CONF.PRIMARY_COMBINED_VOLUME_STANDALONE });
 
-  config.compositions.forEach(compose => {
-    if (compose.source == JS_SECONDARY) {
+  CONF.config.compositions.forEach(compose => {
+    if (compose.source == CONF.JS_SECONDARY) {
       compose.mics.forEach(micId => {
-        xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'Off')
-          .catch((error) => { console.error(error); });
+        if (micId > 1 && micId <= 8)
+          xapi.config.set('Audio Input Microphone ' + micId.toString() + ' Mode', 'Off')
+            .catch((error) => { console.error(error); });
       })
     }
   })
@@ -3681,15 +3679,15 @@ async function primaryStandaloneMode() {
     xapi.config.set('Audio Output HDMI 2 Mode', 'Off')
       .catch((error) => { console.error("48" + error); });
 
-  if (USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
+  if (CONF.USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
     xapi.Config.Cameras.PresenterTrack.CameraPosition.Pan
-      .set(SPLIT_PRESENTERTRACK_SETTINGS.PAN);
+      .set(CONF.SPLIT_PRESENTERTRACK_SETTINGS.PAN);
     xapi.Config.Cameras.PresenterTrack.CameraPosition.Tilt
-      .set(SPLIT_PRESENTERTRACK_SETTINGS.TILT);
+      .set(CONF.SPLIT_PRESENTERTRACK_SETTINGS.TILT);
     xapi.Config.Cameras.PresenterTrack.CameraPosition.Zoom
-      .set(SPLIT_PRESENTERTRACK_SETTINGS.ZOOM);
+      .set(CONF.SPLIT_PRESENTERTRACK_SETTINGS.ZOOM);
     xapi.Config.Cameras.PresenterTrack.TriggerZone
-      .set(SPLIT_PRESENTERTRACK_SETTINGS.TRIGGERZONE);
+      .set(CONF.SPLIT_PRESENTERTRACK_SETTINGS.TRIGGERZONE);
   }
 
   // perform switcher code actions when room is split on primary
@@ -3709,10 +3707,10 @@ async function secondaryStandaloneMode() {
   await delay(2000); // give some time to get out of standby
 
   handleExternalController('SECONDARY_SPLIT');
-  xapi.config.set('Audio Output Line ' + JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'Off')
+  xapi.config.set('Audio Output Line ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'Off')
     .catch((error) => { console.error(error); });
 
-  xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('Off')
+  xapi.Config.Audio.Input.HDMI[CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('Off')
     .catch((error) => { console.error("5" + error); });;
 
   /*
@@ -3722,8 +3720,8 @@ SET WeakuOnMotionDetect to stored value
 */
 
   // decrease main volume by 5Db since it was increased by the same when combining rooms
-  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Decrease({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
-  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS == 0 && SECONDARY_COMBINED_VOLUME_STANDALONE > 0) xapi.Command.Audio.Volume.Set({ Level: SECONDARY_COMBINED_VOLUME_STANDALONE });
+  if (CONF.SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Decrease({ Steps: CONF.SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
+  if (CONF.SECONDARY_COMBINED_VOLUME_CHANGE_STEPS == 0 && CONF.SECONDARY_COMBINED_VOLUME_STANDALONE > 0) xapi.Command.Audio.Volume.Set({ Level: CONF.SECONDARY_COMBINED_VOLUME_STANDALONE });
 
   // restore secondary settings we stored away before combining
   JoinSplit_secondary_settings = await GMM.read.global('JoinSplit_secondary_settings').catch(async e => {
@@ -3785,16 +3783,16 @@ async function secondaryCombinedMode() {
   if (!isOSEleven)
     xapi.config.set('UserInterface OSD Mode', 'Unobstructed')
       .catch((error) => { console.error("91" + error); });
-  xapi.config.set('Audio Output Line ' + JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'On').catch((error) => { console.error(error); });
+  xapi.config.set('Audio Output Line ' + CONF.JOIN_SPLIT_CONFIG.SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID + ' Mode', 'On').catch((error) => { console.error(error); });
 
-  xapi.Config.Audio.Input.HDMI[JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
+  xapi.Config.Audio.Input.HDMI[CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID].Mode.set('On')
     .catch((error) => { console.error("5" + error); });
 
   xapi.Command.Video.Selfview.Set({ Mode: 'Off' });
 
   // increase main volume by 5db, will decrease upon splitting again
-  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Increase({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
-  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS == 0 && SECONDARY_COMBINED_VOLUME_COMBINED > 0) xapi.Command.Audio.Volume.Set({ Level: SECONDARY_COMBINED_VOLUME_COMBINED });
+  if (CONF.SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Increase({ Steps: CONF.SECONDARY_COMBINED_VOLUME_CHANGE_STEPS });
+  if (CONF.SECONDARY_COMBINED_VOLUME_CHANGE_STEPS == 0 && CONF.SECONDARY_COMBINED_VOLUME_COMBINED > 0) xapi.Command.Audio.Volume.Set({ Level: CONF.SECONDARY_COMBINED_VOLUME_COMBINED });
 
 
   //grab current secondary settings before overwriting for combining  
@@ -3822,7 +3820,7 @@ async function secondaryCombinedMode() {
   xapi.command('Conference DoNotDisturb Activate')
     .catch((error) => { console.error(error); });
 
-  if (JoinSplit_secondary_settings.VideoMonitors == 'Single' && JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID == 2) {
+  if (JoinSplit_secondary_settings.VideoMonitors == 'Single' && CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID == 2) {
     xapi.Config.Video.Monitors.set('Dual');
   }
   else {
@@ -3832,10 +3830,10 @@ async function secondaryCombinedMode() {
 
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); });
 
-  xapi.command('Video Matrix Assign', { Output: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: 1 }).catch((error) => { console.error(error); });
-  xapi.command('Video Matrix Assign', { Output: 1, SourceID: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID }).catch((error) => { console.error(error); });
+  xapi.command('Video Matrix Assign', { Output: CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: 1 }).catch((error) => { console.error(error); });
+  xapi.command('Video Matrix Assign', { Output: 1, SourceID: CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID }).catch((error) => { console.error(error); });
   if (JoinSplit_secondary_settings.VideoMonitors == 'Dual' || JoinSplit_secondary_settings.VideoMonitors == 'DualPresentationOnly') {
-    xapi.command('Video Matrix Assign', { Output: 2, SourceID: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID }).catch((error) => { console.error(error); });
+    xapi.command('Video Matrix Assign', { Output: 2, SourceID: CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID }).catch((error) => { console.error(error); });
   }
 
   // switcher actions when secondary is combined
@@ -3853,7 +3851,7 @@ async function secondaryCombinedMode() {
 GMM.Event.Schedule.on('01:00', event => {
   console.log(event);
   console.log('Setting DND on daily schedule...')
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && roomCombined) {
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY && roomCombined) {
     xapi.Command.Conference.DoNotDisturb.Activate({ Timeout: 1440 });
   }
 })
@@ -3861,7 +3859,7 @@ GMM.Event.Schedule.on('01:00', event => {
 xapi.Status.Cameras.SpeakerTrack.ActiveConnector.on(value => {
   console.log('New Camera connector: ', value);
   ST_ACTIVE_CONNECTOR = parseInt(value);
-  if (JOIN_SPLIT_CONFIG.ROOM_ROLE == JS_SECONDARY && roomCombined) {
+  if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY && roomCombined) {
     // need to send to primary codec the video input from the correct ST camera if it is
     // an SP60. If a QuadCam, it will always be 1 and this event wont be firing other than when turning
     // speakertracking on/off which for the secondary codec in combined mode should be only once when combining
@@ -3878,7 +3876,7 @@ xapi.Status.Cameras.SpeakerTrack.ActiveConnector.on(value => {
     sourceDict["SourceID"] = sourceIDtoMatrix.toString();
     xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
     */
-    xapi.command('Video Matrix Assign', { Output: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: sourceIDtoMatrix }).catch((error) => { console.error(error); });
+    xapi.command('Video Matrix Assign', { Output: CONF.JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: sourceIDtoMatrix }).catch((error) => { console.error(error); });
   }
 });
 
