@@ -349,11 +349,11 @@ const profile_LAY4 = {}
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-+ Fill out the name you will use for this codec to be referred to in the
++ Fill out the IP Address you will use for this codec to be referred to in the
 + value for the 'combine' key in the L_WALLS object for each 'layout'
 + The example shows what you would fill out when configuring for the 
 + primary main room, but different rooms must have a different value for 
-+ THIS_CODEC_NAME and should match the correct entries in the value for the
++ THIS_CODEC_IP and should match the correct entries in the value for the
 + combine key for each layout.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
