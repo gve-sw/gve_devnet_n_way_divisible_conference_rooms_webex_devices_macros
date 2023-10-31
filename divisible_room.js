@@ -905,6 +905,47 @@ async function setPrimaryDefaultConfig() {
   xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90" + error); });
 
 
+  // If this codec was a secondary at some point, we need to restore secondary settings we stored away before combining
+  JoinSplit_secondary_settings = await GMM.read.global('JoinSplit_secondary_settings').catch(async e => {
+    console.log("No JoinSplit_secondary_settings global detected.")
+    return JoinSplit_secondary_settings;
+  });
+
+  if (JoinSplit_secondary_settings.UltrasoundMax > 0) {
+    xapi.Config.Audio.Ultrasound.MaxVolume.set(JoinSplit_secondary_settings.UltrasoundMax);
+  }
+
+  if (JoinSplit_secondary_settings.WakeupOnMotionDetection != '') {
+    xapi.config.set('Standby WakeupOnMotionDetection', JoinSplit_secondary_settings.WakeupOnMotionDetection)
+      .catch((error) => { console.error(error); });
+  }
+
+  if (JoinSplit_secondary_settings.StandbyControl != '') {
+    xapi.config.set('Standby Control', JoinSplit_secondary_settings.StandbyControl)
+      .catch((error) => { console.error(error); });
+  }
+
+  if (JoinSplit_secondary_settings.VideoMonitors != '') {
+    xapi.Config.Video.Monitors.set(JoinSplit_secondary_settings.VideoMonitors)
+      .catch((error) => { console.error(error); });
+    switch (JoinSplit_secondary_settings.VideoMonitors) {
+      case 'Dual':
+        xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
+        xapi.Config.Video.Output.Connector[2].MonitorRole.set('Second');
+        break;
+      case 'DualPresentationOnly':
+        xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
+        xapi.Config.Video.Output.Connector[2].MonitorRole.set('PresentationOnly');
+        break;
+      case 'Single':
+        xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
+        xapi.Config.Video.Output.Connector[2].MonitorRole.set('First');
+        break;
+    }
+  }
+
+
+
   if (await isCodecPro()) {
     xapi.config.set('Audio Input ARC 1 Mode', 'Off')
       .catch((error) => { console.error("1" + error); });
@@ -3584,6 +3625,47 @@ async function primaryCombinedMode() {
   xapi.command('Conference DoNotDisturb Deactivate').catch((error) => { console.error(error); });
   xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90" + error); });
 
+
+  // If this codec was a secondary at some point, we need to restore secondary settings we stored away before combining
+  JoinSplit_secondary_settings = await GMM.read.global('JoinSplit_secondary_settings').catch(async e => {
+    console.log("No JoinSplit_secondary_settings global detected.")
+    return JoinSplit_secondary_settings;
+  });
+
+  if (JoinSplit_secondary_settings.UltrasoundMax > 0) {
+    xapi.Config.Audio.Ultrasound.MaxVolume.set(JoinSplit_secondary_settings.UltrasoundMax);
+  }
+
+  if (JoinSplit_secondary_settings.WakeupOnMotionDetection != '') {
+    xapi.config.set('Standby WakeupOnMotionDetection', JoinSplit_secondary_settings.WakeupOnMotionDetection)
+      .catch((error) => { console.error(error); });
+  }
+
+  if (JoinSplit_secondary_settings.StandbyControl != '') {
+    xapi.config.set('Standby Control', JoinSplit_secondary_settings.StandbyControl)
+      .catch((error) => { console.error(error); });
+  }
+
+  if (JoinSplit_secondary_settings.VideoMonitors != '') {
+    xapi.Config.Video.Monitors.set(JoinSplit_secondary_settings.VideoMonitors)
+      .catch((error) => { console.error(error); });
+    switch (JoinSplit_secondary_settings.VideoMonitors) {
+      case 'Dual':
+        xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
+        xapi.Config.Video.Output.Connector[2].MonitorRole.set('Second');
+        break;
+      case 'DualPresentationOnly':
+        xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
+        xapi.Config.Video.Output.Connector[2].MonitorRole.set('PresentationOnly');
+        break;
+      case 'Single':
+        xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
+        xapi.Config.Video.Output.Connector[2].MonitorRole.set('First');
+        break;
+    }
+  }
+
+
   if (CONF.PRIMARY_COMBINED_VOLUME_COMBINED != 0) xapi.Command.Audio.Volume.Set({ Level: CONF.PRIMARY_COMBINED_VOLUME_COMBINED });
 
 
@@ -3774,6 +3856,14 @@ SET WeakuOnMotionDetect to stored value
 
 async function secondaryCombinedMode() {
   //setCombinedMode(true);
+
+  // In case this is coming from being a Primary, reset MainVideoSources and DefaultMainSource
+  xapi.config.set('Video DefaultMainSource', '1')
+    .catch((error) => { console.error("50" + error); });
+  xapi.command('Video Input SetMainVideoSource', { ConnectorID: 1 })
+    .catch((error) => { console.error("52" + error); });
+
+
   roomCombined = true;
   await xapi.Command.Standby.Deactivate(); // take out of standby to avoid problems in later versions of RoomOS 11.x
   await delay(5000); // give some time to get out of standby
