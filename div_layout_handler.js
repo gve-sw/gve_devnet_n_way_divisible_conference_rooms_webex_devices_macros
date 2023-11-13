@@ -19,9 +19,10 @@ or implied.
  *                          gchaves@cisco.com
  * 
  * 
- * Released: October 27th, 2023
- * 
- * Version 2.2.0
+ * Macro file: div_layout_handler
+ * Version: 2.2.1
+ * Released: November 13, 2023
+ * Latest RoomOS version tested: 11.9.1.13
  * 
  * Description: 
  *    - Implements rooms layout handling for divisible rooms macro
@@ -58,7 +59,11 @@ var mainCodec;
 async function init() {
     await GMM.memoryInit();
     try {
-        mainCodec = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+        if (CONF.BOT_TOKEN == '')
+            mainCodec = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP);
+        else
+            mainCodec = new GMM.Connect.Webex(CONF.BOT_TOKEN, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP); //TODO: define BOT_TOKEN and determine if I can use CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP for codec IDs instead
+
     } catch (e) {
         console.error(e)
     }
@@ -80,9 +85,14 @@ function delay(ms) { return new Promise(resolve => { setTimeout(resolve, ms) }) 
 async function sendIntercodecMessage(message) {
     console.log(`sendIntercodecMessage:  message = ${message}`);
     if (mainCodec != '')
-        mainCodec.status(message).passIP().queue().catch(e => {
-            console.log('Error sending message');
-        });
+        if (CONF.BOT_TOKEN == '')
+            mainCodec.status(message).passIP().queue().catch(e => {
+                console.log('Error sending message');
+            });
+        else
+            mainCodec.status(message).passDeviceId().queue().catch(e => {
+                console.log('Error sending message');
+            });
 }
 
 async function processChangeLayout(theLayout) {

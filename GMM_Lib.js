@@ -29,9 +29,9 @@ or implied.
  *                            been merged in GMM_Lib version 1.7.0
  * 
  * Released: May 16, 2022
- * Updated: Oct 10, 2023 || 5:01pm EST
+ * Updated: Nov 8, 2023 
  * 
- * Version: 1.9.701_InDev
+ * Version: 1.9.702
  * 
  * GMM.Config.adjustHTTPClientTimeout
  * 
@@ -47,7 +47,7 @@ export const GMM = {
     MacroName: _main_macro_name()
   },
   DevConfig: {
-    version: '1.9.7_InDev'
+    version: '1.9.702'
   },
   DevAssets: {
     queue: [],
@@ -561,6 +561,10 @@ export const GMM = {
         this.Payload['Value'] = message
         return this
       }
+      passDeviceId() {
+        this.passId = true
+        return this
+      }
       passToken(newToken = '') {
         if (newToken != '') {
           this.Payload.Source['Auth'] = newToken
@@ -588,7 +592,7 @@ export const GMM = {
         }
         if (typeof this.passId != 'undefined') {
           var temp = await discoverDeviceId(this.Params.Header, this.Payload.Source.Id)
-          this.Payload.Source['DeviceId'] = temp.items == '' ? 'Not Found' : temp.items[0].id
+          this.Payload.Source['DeviceID'] = temp.items == '' ? 'Not Found' : temp.items[0].id
         }
         if (JSON.stringify(this.Payload).length > GMM.DevAssets.maxPayloadSize) {
           throw ({ '⚠ GMM Error ⚠': `GMM Connect IP paylod exceed maximum character limit`, MaxLimit: GMM.DevAssets.maxPayloadSize, Payload: { Size: JSON.stringify(this.Payload).length, Content: JSON.stringify(this.Payload) } })

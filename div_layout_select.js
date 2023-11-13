@@ -13,20 +13,16 @@ or implied.
 *
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
-* Macro file: divisible_room
-* Version: 2.2.0
-* Released: October 26, 2023
-* Latest RoomOS version tested: 11.8.1.7
+* Macro file: div_layout_select
+* Version: 2.2.1
+* Released: November 13, 2023
+* Latest RoomOS version tested: 11.9.1.13
 *
  * Author(s):               Gerardo Chaves
  *                          Technical Solutions Architect
  *                          Cisco Systems
  *                          gchaves@cisco.com
  * 
- * 
- * Released: October 27th, 2023
- * 
- * Version 2.2.0
  * 
  * Description: 
  *    - Implements rooms layout selection for divisible rooms macro
@@ -75,20 +71,30 @@ let theSentFullLayout = {}
 
 CONF.config.compositions.forEach(compose => {
     if ((compose.source == CONF.JS_SECONDARY && compose.codecIP != '') && compose.codecIP != CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
-        console.log(`Setting up connection to secondary codec with IP ${compose.codecIP}`);
+        console.log(`Setting up connection to secondary codec with address ${compose.codecIP}`);
         codecIPArray.push(compose.codecIP);
         console.log(`Creating secondaries status object for this secondary codec...`)
         secondariesStatus[compose.codecIP] = { 'inCall': false, 'inPreview': false, 'online': false, 'layout': '' };
     }
 })
 
-otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, codecIPArray)
+if (CONF.BOT_TOKEN == '')
+    otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, codecIPArray);
+else
+    otherCodecs = new GMM.Connect.Webex(CONF.BOT_TOKEN, codecIPArray); //TODO: define BOT_TOKEN and determine if I can use codecIPArray for codec IDs instead
 
 
 async function sendLayoutApplyMessage(secIP, message) {
-    await otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
-        console.log(`Error sending message selection message to secondary with IP ${secIP}`);
-    });
+    if (CONF.BOT_TOKEN == '') {
+        await otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
+            console.log(`Error sending message selection message to secondary with IP ${secIP}`);
+        });
+    }
+    else {
+        await otherCodecs.status(message).passDeviceId().queue('secondary', secIP).catch(e => {
+            console.log(`Error sending message selection message to secondary with IP ${secIP}`);
+        });
+    }
 }
 
 GMM.Event.Queue.on(report => {
@@ -255,7 +261,7 @@ GMM.Event.Receiver.on(async event => {
             let theLayout = '';
             if (theEventValue.slice(0, 19) == 'SEC_LAYOUT_APPLIED_') {
                 theLayout = theEventValue.substring(19);
-                await processChangeLayoutResponse(event.Source?.IPv4, theLayout);
+                await processChangeLayoutResponse((CONF.BOT_TOKEN == '') ? event.Source?.IPv4 : event.Source?.deviceId, theLayout);
             }
         }
     }

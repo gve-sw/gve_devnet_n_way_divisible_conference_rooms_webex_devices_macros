@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.0
-* Released: October 27, 2023
+* Version: 2.2.1
+* Released: November 13, 2023
 * Latest RoomOS version tested: 11.9.1.13 
 *
 * Macro Author:      	Gerardo Chaves
@@ -253,8 +253,9 @@ async function validate_config() {
 
   // if running in secondary codec make sure we have a valid IP address for the primary codec
   if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY) {
-    if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP))
-      await disableMacro(`config validation fail: Invalid IP address CONFIGURED to talk to primary codec: ${CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP} `);
+    //if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP))
+    //await disableMacro(`config validation fail: Invalid IP address CONFIGURED to talk to primary codec: ${CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP} `);
+    console.log('Skipping IP address validation since now we support device IDs')
 
   }
   else {
@@ -269,11 +270,12 @@ async function validate_config() {
       // make sure each composition is marked CONF.JS_PRIMARY or CONF.JS_SECONDARY
       if (![CONF.JS_PRIMARY, CONF.JS_SECONDARY, CONF.JS_AUXILIARY, CONF.JS_LOCAL].includes(compose.source)) await disableMacro(`config validation fail: composition named ${compose.name} should have a valid value for key 'source' (CONF.JS_PRIMARY, CONF.JS_SECONDARY, CONF.JS_AUXILIARY or CONF.JS_LOCAL).`);
 
+      /*
       // make sure if CONF.JS_SECONDARY source, then there is a real IP address CONFIGURED
       if (compose.source == (CONF.JS_SECONDARY || CONF.JS_AUXILIARY))
         if (!/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(compose.codecIP))
           await disableMacro(`config validation fail: Invalid IP address for composition ${compose.name}: ${compose.codecIP} `);
-
+    */
 
       /*
             // make sure if CONF.JS_SECONDARY source, mics specified are only analog mics being monitored
@@ -438,7 +440,7 @@ async function init_intercodec() {
 
       CONF.config.compositions.forEach(compose => {
         if ((compose.source == CONF.JS_SECONDARY && compose.codecIP != '') && compose.codecIP != CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP) {
-          console.log(`Setting up connection to secondary codec with IP ${compose.codecIP}`);
+          console.log(`Setting up connection to secondary codec with address ${compose.codecIP}`);
           //otherCodec[compose.codecIP] = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, compose.codecIP)
           codecIPArray.push(compose.codecIP);
           console.log(`Creating secondaries keep alive status objects`);
@@ -457,15 +459,24 @@ async function init_intercodec() {
         }
       })
 
-      otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, codecIPArray)
+      if (CONF.BOT_TOKEN == '')
+        otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, codecIPArray);
+      else
+        otherCodecs = new GMM.Connect.Webex(CONF.BOT_TOKEN, codecIPArray);
+
       //console.log(otherCodecs)
 
       await GMM.write.global('JoinSplit_secondariesStatus', secondariesStatus).then(() => {
         console.log({ Message: 'ChangeState', Action: 'Secondary codecs state stored.' })
       })
     }
-    else
-      otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+    else {
+      if (CONF.BOT_TOKEN == '')
+        otherCodecs = new GMM.Connect.IP(CONF.OTHER_CODEC_USERNAME, CONF.OTHER_CODEC_PASSWORD, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+      else
+        otherCodecs = new GMM.Connect.Webex(CONF.BOT_TOKEN, CONF.JOIN_SPLIT_CONFIG.PRIMARY_CODEC_IP)
+
+    }
 
   // now connect any Auxiliary codecs this one might have CONFIGURED irrespective if primary or secondary
 
@@ -561,7 +572,7 @@ let micHandler = () => void 0;
 let micHandlerEthernet = () => void 0;
 let micHandlerUSB = () => void 0;
 
-let overviewShowDouble = false;
+let overviewShowDouble = true; //Always setting overviewShowDouble to true so we always evaluate the overview composition now
 let inSideBySide = false;
 
 let presenterTracking = false;
@@ -1367,108 +1378,111 @@ async function startAutomation() {
     setTimeout(() => { xapi.Command.Cameras.SpeakerTrack.Activate().catch(handleError) }, 2000) // in RoomOS11 Beta, if we do not delay turning on ST, something turns it back off
   } else xapi.Command.Cameras.SpeakerTrack.Activate().catch(handleError);
 
+  // only initialize vumeters if side by side timer (overview timer) is not zero
+  // because, if zero, that means we will always be showing side by side (overview) mode
+  // and never need to switch to a specific camera
+  if (CONF.SIDE_BY_SIDE_TIME > 0) {
+    //registering vuMeter event handler for analog mics
+    if (CONF.config.monitorMics.length > 0) {
+      micHandler();
+      micHandler = () => void 0;
+      micHandler = xapi.event.on('Audio Input Connectors Microphone', (event) => {
+        if (typeof micArrays[event.id[0]] != 'undefined' && (!CONF.CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
+          micArrays[event.id[0]].shift();
+          micArrays[event.id[0]].push(event.VuMeter);
 
-  //registering vuMeter event handler for analog mics
-  if (CONF.config.monitorMics.length > 0) {
-    micHandler();
-    micHandler = () => void 0;
-    micHandler = xapi.event.on('Audio Input Connectors Microphone', (event) => {
-      if (typeof micArrays[event.id[0]] != 'undefined' && (!CONF.CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity < 1)) {
-        micArrays[event.id[0]].shift();
-        micArrays[event.id[0]].push(event.VuMeter);
-
-        // checking on manual_mode might be unnecessary because in manual mode,
-        // audio events should not be triggered
-        if (manual_mode == false) {
-          // invoke main logic to check mic levels ans switch to correct camera input
-          checkMicLevelsToSwitchCamera();
-        }
-      }
-    });
-  }
-
-
-  //registering vuMeter event handler for Ethernet mics
-  if (CONF.config.ethernetMics.length > 0) {
-    micHandlerEthernet();
-    micHandlerEthernet = () => void 0;
-    micHandlerEthernet = xapi.event.on('Audio Input Connectors Ethernet', (event) => {
-      //console.log(event)
-      event.SubId.forEach(submic => {
-        if (typeof micArrays[event.id + submic.id] != 'undefined') {
-          micArrays[event.id + submic.id].shift();
-          micArrays[event.id + submic.id].push(submic.VuMeter);
+          // checking on manual_mode might be unnecessary because in manual mode,
+          // audio events should not be triggered
           if (manual_mode == false) {
             // invoke main logic to check mic levels ans switch to correct camera input
             checkMicLevelsToSwitchCamera();
           }
         }
-      })
-
-    });
-  }
+      });
+    }
 
 
-  //registering vuMeter event handler for USB mics
-  if (CONF.config.usbMics.length > 0) {
-    micHandlerUSB();
-    micHandlerUSB = () => void 0;
-    micHandlerUSB = xapi.event.on('Audio Input Connectors USBMicrophone', (event) => {
-      //console.log(event)
-      if (typeof micArrays['10' + event.id] != 'undefined') {
-        micArrays['10' + event.id].shift();
-        micArrays['10' + event.id].push(event.VuMeter);
+    //registering vuMeter event handler for Ethernet mics
+    if (CONF.config.ethernetMics.length > 0) {
+      micHandlerEthernet();
+      micHandlerEthernet = () => void 0;
+      micHandlerEthernet = xapi.event.on('Audio Input Connectors Ethernet', (event) => {
+        //console.log(event)
+        event.SubId.forEach(submic => {
+          if (typeof micArrays[event.id + submic.id] != 'undefined') {
+            micArrays[event.id + submic.id].shift();
+            micArrays[event.id + submic.id].push(submic.VuMeter);
+            if (manual_mode == false) {
+              // invoke main logic to check mic levels ans switch to correct camera input
+              checkMicLevelsToSwitchCamera();
+            }
+          }
+        })
 
-        // checking on manual_mode might be unnecessary because in manual mode,
-        // audio events should not be triggered
-        if (manual_mode == false) {
-          // invoke main logic to check mic levels ans switch to correct camera input
-          checkMicLevelsToSwitchCamera();
+      });
+    }
+
+
+    //registering vuMeter event handler for USB mics
+    if (CONF.config.usbMics.length > 0) {
+      micHandlerUSB();
+      micHandlerUSB = () => void 0;
+      micHandlerUSB = xapi.event.on('Audio Input Connectors USBMicrophone', (event) => {
+        //console.log(event)
+        if (typeof micArrays['10' + event.id] != 'undefined') {
+          micArrays['10' + event.id].shift();
+          micArrays['10' + event.id].push(event.VuMeter);
+
+          // checking on manual_mode might be unnecessary because in manual mode,
+          // audio events should not be triggered
+          if (manual_mode == false) {
+            // invoke main logic to check mic levels ans switch to correct camera input
+            checkMicLevelsToSwitchCamera();
+          }
         }
+      });
+    }
+
+
+    // start VuMeter monitoring
+    console.log("Turning on VuMeter monitoring...")
+    for (var i in CONF.config.monitorMics) {
+      xapi.command('Audio VuMeter Start', {
+        ConnectorId: CONF.config.monitorMics[i],
+        ConnectorType: 'Microphone',
+        IntervalMs: 500,
+        Source: 'AfterAEC'
+      });
+    }
+
+
+    let ethernetMicsStarted = [];
+    for (var i in CONF.config.ethernetMics) {
+      if (!ethernetMicsStarted.includes(parseInt(CONF.config.ethernetMics[i] / 10))) {
+        ethernetMicsStarted.push(parseInt(CONF.config.ethernetMics[i] / 10));
+        xapi.Command.Audio.VuMeter.Start(
+          {
+            ConnectorId: parseInt(CONF.config.ethernetMics[i] / 10),
+            ConnectorType: 'Ethernet',
+            IncludePairingQuality: 'Off',
+            IntervalMs: 500,
+            Source: 'AfterAEC'
+          });
       }
-    });
-  }
+    }
 
 
-  // start VuMeter monitoring
-  console.log("Turning on VuMeter monitoring...")
-  for (var i in CONF.config.monitorMics) {
-    xapi.command('Audio VuMeter Start', {
-      ConnectorId: CONF.config.monitorMics[i],
-      ConnectorType: 'Microphone',
-      IntervalMs: 500,
-      Source: 'AfterAEC'
-    });
-  }
-
-
-  let ethernetMicsStarted = [];
-  for (var i in CONF.config.ethernetMics) {
-    if (!ethernetMicsStarted.includes(parseInt(CONF.config.ethernetMics[i] / 10))) {
-      ethernetMicsStarted.push(parseInt(CONF.config.ethernetMics[i] / 10));
+    for (var i in CONF.config.usbMics) {
       xapi.Command.Audio.VuMeter.Start(
         {
-          ConnectorId: parseInt(CONF.config.ethernetMics[i] / 10),
-          ConnectorType: 'Ethernet',
+          ConnectorId: CONF.config.usbMics[i] - 100,
+          ConnectorType: 'USBMicrophone',
           IncludePairingQuality: 'Off',
           IntervalMs: 500,
           Source: 'AfterAEC'
         });
     }
   }
-
-
-  for (var i in CONF.config.usbMics) {
-    xapi.Command.Audio.VuMeter.Start(
-      {
-        ConnectorId: CONF.config.usbMics[i] - 100,
-        ConnectorType: 'USBMicrophone',
-        IncludePairingQuality: 'Off',
-        IntervalMs: 500,
-        Source: 'AfterAEC'
-      });
-  }
-
 }
 
 function stopAutomation() {
@@ -1828,13 +1842,14 @@ function averageArray(arrayIn) {
   return avg;
 }
 
+
 async function recallSideBySideMode() {
-  if (!manual_mode && roomCombined) {
+  if (!manual_mode /*&& roomCombined*/) { //TODO: Make sure that allowing overview when in standalone works ok. 
     inSideBySide = true;
     if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
     // only invoke SideBySideMode if not in presenter QA mode and not presentertrack is currently not active
     // because Presenter QA mode has it's own way of composing side by side. 
-    if (presenterTracking && presenterDetected) {
+    if ((presenterTracking && presenterDetected) && CONF.SIDE_BY_SIDE_TIME > 0) {
       // If in PRESENTER_QA_MODE mode and we go to silence, we need to restart the composition timer
       // to remove composition (if it was there) only after the configured time has passed.
       if (PRESENTER_QA_MODE && !webrtc_mode) restartCompositionTimer();
@@ -1843,32 +1858,49 @@ async function recallSideBySideMode() {
     else {
 
       if (overviewShowDouble) {
-        if (!webrtc_mode) { //only compose if not in webrtc mode (not supported). Otherwise, just use preset 30
+        if (!webrtc_mode) { //only compose if not in webrtc mode (not supported). Otherwise, just use preset 30 if applicable
           let sourceDict = { ConnectorId: [0, 0] }; // just initializing
           //connectorDict["ConnectorId"]=OVERVIEW_DOUBLE_SOURCE_IDS;
           //console.log("Trying to use this for connector dict in recallSideBySideMode(): ", sourceDict  )
           //xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
 
-          CONF.config.compositions.forEach(compose => {
+          CONF.config.compositions.forEach(async compose => {
             if (compose.mics.includes(0)) {
               console.log(`SideBySide setting to composition = ${compose.name}`);
-              if (compose.preset != 0) {
-                console.log(`SideBySide setting Video Input to preset [${compose.preset}] `);
+              if (compose.preset != 0 && typeof compose.preset == 'number') {
+                console.log(`SideBySide setting Video Input to single preset [${compose.preset}] `);
                 sourceDict = { PresetId: compose.preset };
-                xapi.Command.Camera.Preset.Activate(sourceDict);
+                await xapi.Command.Camera.Preset.Activate(sourceDict);
+                let presetCamId = await getPresetCamera(compose.preset);
+                let presetCamConnector = await xapi.Status.Cameras.Camera[presetCamId].DetectedConnector.get();
+                await xapi.Command.Video.Input.SetMainVideoSource({ ConnectorId: [presetCamConnector], Layout: 'Prominent' });
               }
               else {
-                // first need to remove connectors from un-selected secondaries
                 let selected_connectors = []
+
+                if (compose.preset != 0 && typeof compose.preset != 'number') { // if not single preset, it is a list of presets we need to evaluate
+                  console.log(`SideBySide setting Video Input to multiple preset as seen in [${compose.preset}] `);
+                  // when multiple presets, activate them and then proceed to create the sourceDict and apply as if no
+                  // presets
+                  compose.preset.forEach(async thePresetID => {
+                    sourceDict = { PresetId: thePresetID };
+                    await xapi.Command.Camera.Preset.Activate(sourceDict);
+                  })
+                }
+
+                // first need to remove connectors from un-selected secondaries
+                // logic below copies over any local connectos (not associated in codec_map) 
+                // including those for cameras associated in presets and
+                // also those associated but where secondary codec is selected. 
                 compose.connectors.forEach(theConnector => {
                   // only use for overview connectors that are not associated to secondary codecs or if secondary codec is selected
-                  if ((!(theConnector in connector_to_codec_map)) || secondariesStatus[connector_to_codec_map[theConnector]].selected) {
+                  if ((!(theConnector in connector_to_codec_map)) || (secondariesStatus[connector_to_codec_map[theConnector]].selected && roomCombined)) {
                     selected_connectors.push(theConnector)
                   }
                 })
                 console.log(`Setting Video Input to connectors [${selected_connectors}] and Layout: ${compose.layout}`);
                 sourceDict = { ConnectorId: selected_connectors, Layout: compose.layout }
-                xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
+                await xapi.Command.Video.Input.SetMainVideoSource(sourceDict);
               }
             }
           })
@@ -1884,20 +1916,20 @@ async function recallSideBySideMode() {
               localCallout.command(payload).post()
             }, 250) //250ms delay to allow the main source to resolve first
             pauseSpeakerTrack();
-            xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
+            if (CONF.QUAD_CAM_ID > 0) xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
 
           }
 
         }
       }
-      else {
+      else { //TODO: This is no longer being executed since we are forcing overviewShowDouble to true always
         let sourceDict = { SourceID: '0' };
         sourceDict["SourceID"] = CONF.OVERVIEW_SINGLE_SOURCE_ID.toString();
         console.log("Trying to use this for source dict in recallSideBySideMode(): ", sourceDict)
         xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
         lastSourceDict = sourceDict;
         pauseSpeakerTrack();
-        xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
+        if (CONF.QUAD_CAM_ID > 0) xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
       }
 
 
@@ -2091,6 +2123,7 @@ GMM.Event.Receiver.on(async event => {
             case 'USBModeStarted':
               console.warn(`System is in Default Mode`)
               startAutomation();
+              if (CONF.SIDE_BY_SIDE_TIME == 0) recallSideBySideMode();
               usb_mode = true;
               // always tell the other codec when your are in or out of a call
               await sendIntercodecMessage('CALL_CONNECTED');
@@ -2117,6 +2150,7 @@ GMM.Event.Receiver.on(async event => {
     }
     else { // This section is for handling messages sent from primary to secondary codec and vice versa
       // and for messages from Aux to either Primary or Secondary in same room
+      let theSourceIdentifier = (CONF.BOT_TOKEN == '') ? event.Source?.IPv4 : event.Source?.deviceID; //TODO: verify this is how to extract deviceId
       switch (event.App) { //Based on the App (Macro Name), I'll run some code
         case 'aux_codec':
           console.warn("Received from aux codec: ", event.Value)
@@ -2125,16 +2159,16 @@ GMM.Event.Receiver.on(async event => {
           } else {
             switch (event.Value) {
               case 'VTC-1_OK':
-                handleCodecOnlineAux(event.Source?.IPv4);
+                handleCodecOnlineAux(theSourceIdentifier);
                 break;
               case 'VTC-1_status':
                 handleMacroStatusResponseAux();
                 break;
               case "aux_has_people":
-                handleCodecPeopleReportAux(event.Source?.IPv4, true)
+                handleCodecPeopleReportAux(theSourceIdentifier)
                 break;
               case "aux_no_people":
-                handleCodecPeopleReportAux(event.Source?.IPv4, false)
+                handleCodecPeopleReportAux(theSourceIdentifier)
                 break;
               default:
                 break;
@@ -2147,13 +2181,13 @@ GMM.Event.Receiver.on(async event => {
           } else {
             switch (event.Value) {
               case 'VTC-1_OK':
-                handleCodecOnline(event.Source?.IPv4);
+                handleCodecOnline(theSourceIdentifier);
                 break;
               case 'VTC-1_status':
                 handleMacroStatusResponse();
                 break;
               case 'VTC_KA_OK':
-                priHandleKeepAliveResponse(event.Source?.IPv4);
+                priHandleKeepAliveResponse(theSourceIdentifier);
                 break;
               case 'VTC_KA_req':
                 secSendKeepAliveResponse();
@@ -2163,7 +2197,7 @@ GMM.Event.Receiver.on(async event => {
                 if (roomCombined && (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY)) {
                   console.log('Handling side by side on secondary');
                   deactivateSpeakerTrack();
-                  xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
+                  if (CONF.QUAD_CAM_ID > 0) xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
                 }
                 break;
               case 'automatic_mode':
@@ -2204,10 +2238,10 @@ GMM.Event.Receiver.on(async event => {
                   // while in that state
                   console.log("Secondary in call, setting variable...")
                   //secondaryInCall=true;  
-                  if (event.Source.IPv4 in secondariesStatus)
-                    secondariesStatus[event.Source.IPv4].inCall = true;
+                  if (theSourceIdentifier in secondariesStatus)
+                    secondariesStatus[theSourceIdentifier].inCall = true;
                   else
-                    console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+                    console.warn(`Attempted to set inCall value for secondariesStatus object with key ${theSourceIdentifier} which does not exist.`)
 
                   evalCustomPanels();
                 }
@@ -2235,10 +2269,10 @@ GMM.Event.Receiver.on(async event => {
                   // while in that state
                   console.log("Secondary not in call, setting variable...")
                   //secondaryInCall=false;
-                  if (event.Source.IPv4 in secondariesStatus)
-                    secondariesStatus[event.Source.IPv4].inCall = false;
+                  if (theSourceIdentifier in secondariesStatus)
+                    secondariesStatus[theSourceIdentifier].inCall = false;
                   else
-                    console.warn(`Attempted to set inCall value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+                    console.warn(`Attempted to set inCall value for secondariesStatus object with key ${theSourceIdentifier} which does not exist.`)
 
                   evalCustomPanels();
                 }
@@ -2250,10 +2284,10 @@ GMM.Event.Receiver.on(async event => {
                   // in a variable in the primary to not join or combine
                   // while in that state
                   console.log("Secondary in presentation preview, setting variable...")
-                  if (event.Source.IPv4 in secondariesStatus)
-                    secondariesStatus[event.Source.IPv4].inPreview = true;
+                  if (theSourceIdentifier in secondariesStatus)
+                    secondariesStatus[theSourceIdentifier].inPreview = true;
                   else
-                    console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+                    console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${theSourceIdentifier} which does not exist.`)
                   evalCustomPanels();
                 }
                 break;
@@ -2264,10 +2298,10 @@ GMM.Event.Receiver.on(async event => {
                   // in a variable in the primary to not join or combine
                   // while in that state
                   console.log("Secondary in no longer in preview, setting variable...")
-                  if (event.Source.IPv4 in secondariesStatus)
-                    secondariesStatus[event.Source.IPv4].inPreview = false;
+                  if (theSourceIdentifier in secondariesStatus)
+                    secondariesStatus[theSourceIdentifier].inPreview = false;
                   else
-                    console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${event.Source.IPv4} which does not exist.`)
+                    console.warn(`Attempted to set inPreview value for secondariesStatus object with key ${theSourceIdentifier} which does not exist.`)
                   evalCustomPanels();
                 }
                 break;
@@ -2302,10 +2336,10 @@ GMM.Event.Receiver.on(async event => {
                 await sendIntercodecMessage('SEC_REMOVED_ACK')
                 break;
               case 'SEC_SELECTED_ACK':
-                processSecSelectedAck(event.Source?.IPv4);
+                processSecSelectedAck(theSourceIdentifier);
                 break;
               case 'SEC_REMOVED_ACK':
-                processSecUnselectedAck(event.Source?.IPv4);
+                processSecUnselectedAck(theSourceIdentifier);
                 break;
               case 'MUTE':
                 xapi.command('Audio Microphones Mute');
@@ -2362,9 +2396,16 @@ GMM.Event.Receiver.on(async event => {
 /////////////////////////////////////////////////////////////////////////////////////////
 
 async function sendIntercodecMessage(message) {
-  await otherCodecs.status(message).passIP().queue().catch(e => {
-    console.log('Error sending message');
-  });
+  if (CONF.BOT_TOKEN == '') {
+    await otherCodecs.status(message).passIP().queue().catch(e => {
+      console.log('Error sending message');
+    });
+  }
+  else {
+    await otherCodecs.status(message).passDeviceId().queue().catch(e => {
+      console.log('Error sending message');
+    });
+  }
 }
 
 
@@ -2373,17 +2414,32 @@ async function sendIntercodecMessageAux(message) {
   // only send if there are aux codecs configured
   if (Object.keys(auxCodecs).length != 0) {
     console.log(`sendIntercodecMessage to all aux codecs: message = ${message}`);
-    await auxCodecs.status(message).passIP().queue().catch(e => {
-      alertFailedIntercodecComm("Error connecting to codec for second camera, please contact the Administrator");
-    });
+    if (CONF.BOT_TOKEN == '') {
+      await auxCodecs.status(message).passIP().queue().catch(e => {
+        alertFailedIntercodecComm("Error connecting to codec for second camera, please contact the Administrator");
+      });
+    }
+    else {
+      await auxCodecs.status(message).passDeviceId().queue().catch(e => {
+        alertFailedIntercodecComm("Error connecting to codec for second camera, please contact the Administrator");
+      });
+
+    }
   }
 }
 
 
 async function sendSelectionMessage(secIP, message) {
-  await otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
-    console.log(`Error sending message selection message to secondary with IP ${secIP}`);
-  });
+  if (CONF.BOT_TOKEN == '') {
+    await otherCodecs.status(message).passIP().queue('secondary', secIP).catch(e => {
+      console.log(`Error sending message selection message to secondary with IP ${secIP}`);
+    });
+  }
+  else {
+    await otherCodecs.status(message).passDeviceId().queue('secondary', secIP).catch(e => {
+      console.log(`Error sending message selection message to secondary with IP ${secIP}`);
+    });
+  }
 }
 
 GMM.Event.Queue.on(report => {
@@ -2677,7 +2733,10 @@ function evalSpeakerTrack(value) {
   if (value == 'Active') {
     //if (macroTurnedOnST) {macroTurnedOnST=false;}
     //else {startAutomation();}
-    if (manual_mode) startAutomation();
+    if (manual_mode) {
+      startAutomation();
+      if (CONF.SIDE_BY_SIDE_TIME == 0) recallSideBySideMode(); // need to invoke overview if set to always show
+    };
 
   }
   else {
@@ -2769,7 +2828,10 @@ async function init_switching() {
     //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
     await startAutomation();
     recallSideBySideMode();
-    startInitialCallTimer();
+
+    // only initialize initial call timer if side by side timer (overview timer) is not zero
+    // because, if zero, that means we will always be showing side by side (overview) mode
+    if (CONF.SIDE_BY_SIDE_TIME > 0) startInitialCallTimer();
 
     // always tell the other codec when your are in or out of a call
     await sendIntercodecMessage('CALL_CONNECTED');
@@ -2846,7 +2908,9 @@ async function init_switching() {
 
         console.log("Starting automation due to WebRTCMeeting event...");
         startAutomation();
-        startInitialCallTimer();
+        // only initialize initial call timer if side by side timer (overview timer) is not zero
+        // because, if zero, that means we will always be showing side by side (overview) mode
+        if (CONF.SIDE_BY_SIDE_TIME > 0) startInitialCallTimer();
 
         // always tell the other codec when your are in or out of a call
         await sendIntercodecMessage('CALL_CONNECTED');
@@ -2895,6 +2959,10 @@ async function init_switching() {
   // register to receive events when someone manually turns on speakertrack
   xapi.Status.Cameras.SpeakerTrack.Status.on(evalSpeakerTrack);
 
+  let enabledGet = await xapi.Config.Cameras.PresenterTrack.Enabled.get()
+  presenterTrackConfigured = (enabledGet == 'True') ? true : false;
+  addCustomAutoQAPanel();
+
   // register to receive Presenter Detected events when in PresenterTrack mode.
   // This way we can disable logic for presentertracking if the presenter steps away
   // from stage and re-engage once they come back. 
@@ -2902,16 +2970,24 @@ async function init_switching() {
     console.log('Received PT Presenter Detected as: ', value)
     if (value == 'True') {
       presenterDetected = true;
-      let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
-      let connectorDict = { ConnectorId: presenterSource };
-      console.log("In PresenterDetected handler switching to input with SetMainVideoSource with dict: ", connectorDict)
-      xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
-      lastSourceDict = connectorDict;
+      if (CONF.SIDE_BY_SIDE_TIME > 0) {
+        // only switch input to presenter fully if we are not forcing overview all the time,
+        // otherwise, just let the codec show the presenter within the composition selected for overview
+        let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+        let connectorDict = { ConnectorId: presenterSource };
+        console.log("In PresenterDetected handler switching to input with SetMainVideoSource with dict: ", connectorDict)
+        xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+        lastSourceDict = connectorDict;
+      }
 
     } else {
       presenterDetected = false;
       presenterQAKeepComposition = false;
-      lastSourceDict = { SourceID: '0' }; // forcing a camera switch
+      if (CONF.SIDE_BY_SIDE_TIME > 0) {
+        // no need to force a camera switch unless we are indeed switching since ,
+        // there is a SIDE_BY_SIDE_TIME value set more than 0
+        lastSourceDict = { SourceID: '0' }; // forcing a camera switch
+      }
 
     }
   });
@@ -2923,10 +2999,13 @@ async function init_switching() {
     lastSourceDict = { SourceID: '0' }; // forcing a camera switch
     if (value === 'Follow' || value === 'Persistent') {
       presenterTracking = true;
-      onInitialCallTimerExpired(); // need to clear out InitialCallTimer condition
-      if (PRESENTER_QA_MODE && !webrtc_mode) {
-        //showPTPanelButton();
-        //recallFullPresenter();
+      if (CONF.SIDE_BY_SIDE_TIME > 0) {
+        // only stop initial call timer if we are not forcing overview all the time,
+        stopInitialCallTimer(); //TODO: originally called onInitialCallTimerExpired but that was not working with PT QA mode
+        if (PRESENTER_QA_MODE && !webrtc_mode) {
+          //showPTPanelButton();
+          //recallFullPresenter();
+        }
       }
     }
     else {
@@ -2945,18 +3024,16 @@ async function init_switching() {
     }
     else if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_SECONDARY) {
       // stop automation in case it was on
+      //TODO: Check if this is still necessary, it might be interfering with handling aux on secondary rooms
       stopAutomation();
     }
   }
 
 
-
   // Stop any VuMeters that might have been left from a previous macro run with a different CONF.config.monitorMics constant
   // to prevent errors due to unhandled vuMeter events.
   xapi.Command.Audio.VuMeter.StopAll({});
-  let enabledGet = await xapi.Config.Cameras.PresenterTrack.Enabled.get()
-  presenterTrackConfigured = (enabledGet == 'True') ? true : false;
-  addCustomAutoQAPanel();
+
 
   // turn off speakertrack to get started
   deactivateSpeakerTrack();
@@ -2972,7 +3049,7 @@ async function init() {
   if (!await validate_config()) disableMacro("invalid config")
 
   // make sure Preset 30 exists, if not create it with just an overview shot of camera ID 1 which should be the QuadCam
-  checkOverviewPreset();
+  if (CONF.QUAD_CAM_ID > 0) checkOverviewPreset();
 
   //await GMM.memoryInit();
 
@@ -3025,6 +3102,7 @@ async function init() {
       if (value == 'Active') {
         console.warn(`System is in Passthrough Active Mode`)
         startAutomation();
+        if (CONF.SIDE_BY_SIDE_TIME == 0) recallSideBySideMode();
         usb_mode = true;
         // always tell the other codec when your are in or out of a call
         await sendIntercodecMessage('CALL_CONNECTED');
@@ -3302,11 +3380,13 @@ async function handleWidgetActions(event) {
               console.log('On');
               console.log("Turning on PresenterTrack only...");
               if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
-              deactivateSpeakerTrack();
-              presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
-              connectorDict = { ConnectorId: presenterSource };
-              xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
-              lastSourceDict = connectorDict;
+              if (CONF.SIDE_BY_SIDE_TIME > 0) {
+                deactivateSpeakerTrack();
+                presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+                connectorDict = { ConnectorId: presenterSource };
+                xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+                lastSourceDict = connectorDict;
+              }
               if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
               xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });
               PRESENTER_QA_MODE = false;
@@ -3316,14 +3396,16 @@ async function handleWidgetActions(event) {
               console.log('QA Mode');
               console.log("Turning on PresenterTrack with QA Mode...");
               if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
-              activateSpeakerTrack(); //TODO: test if not activating speakertrack here when you have an SP60 allows it to work in QA mode
-              //pauseSpeakerTrack();
-              presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
-              connectorDict = { ConnectorId: presenterSource };
-              xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
-              lastSourceDict = connectorDict;
-              xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });
-              pauseSpeakerTrack();
+              if (CONF.SIDE_BY_SIDE_TIME > 0) {
+                activateSpeakerTrack(); //TODO: test if not activating speakertrack here when you have an SP60 allows it to work in QA mode
+                //pauseSpeakerTrack();
+                presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+                connectorDict = { ConnectorId: presenterSource };
+                xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+                lastSourceDict = connectorDict;
+                xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });
+                pauseSpeakerTrack();
+              }
               if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
               PRESENTER_QA_MODE = true;
@@ -3333,7 +3415,7 @@ async function handleWidgetActions(event) {
           }
       }
       else {
-        console.log("PresenterTrack not configured!!!");
+        console.log("PresenterTrack not configured or MONITOR_PRESENTERTRACK set to false !!!");
       }
       break;
 
@@ -3773,7 +3855,10 @@ async function primaryStandaloneMode() {
   }
 
   // perform switcher code actions when room is split on primary
-  overviewShowDouble = false;
+  //overviewShowDouble = false;
+  //Always setting overviewShowDouble to true so we always evaluate the overview composition now
+  overviewShowDouble = true;
+
   //OVERVIEW_DOUBLE_SOURCE_IDS = [1,1]; // should not be needed, but useful if someone overviewdouble is enabled somehow
   //turn off side by side at this point in case it stayed turned on!!!
   recallSideBySideMode();

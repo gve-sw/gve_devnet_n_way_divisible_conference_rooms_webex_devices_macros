@@ -29,7 +29,8 @@ const profile_LAY1 = {
         SECONDARY_AUDIO_TIELINE_OUTPUT_TO_PRI_ID: 5, // change only if non standard (i.e. codec EQ)
         SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID: 3, // change only for non-standard singe screen setups
         SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID: 4, // change only for non-standard singe screen setups
-        PRIMARY_CODEC_IP: '10.0.0.100'
+        BOT_TOKEN: '',
+        PRIMARY_CODEC_IP: '10.0.0.100' // IP address or webex codec ID (if BOT_TOKEN is set) for primary codec. To obtain codec ID: xStatus Webex DeveloperId
     },
 
     // If you fill out the OTHER_CODEC_USERNAME and OTHER_CODEC_PASSWORD with the credentials to be able to log
@@ -44,6 +45,12 @@ const profile_LAY1 = {
     OTHER_CODEC_PASSWORD: '',
 
 
+    // You can fill out the BOT_TOKEN value intead of OTHER_CODEC_USERNAME/OTHER_CODEC_PASSWORD to use the Webex cloud to
+    // communicate with other codecs in the system. it should contain the Bot access token you wish to use to have the codec use
+    // when sending commands to the other codecs by using Webex messaging. 
+    BOT_TOKEN: '',
+
+
 
 
     /*
@@ -56,7 +63,7 @@ const profile_LAY1 = {
     // If you wish to pin-protect the room combine/split control
     // panel (when not using wall sensor), enter a numeric value for COMBINE_CONTROL_PIN
     // otherwise leave it blank: ""
-    COMBINE_CONTROL_PIN: "9999",
+    COMBINE_CONTROL_PIN: "",
 
     // For more reliability when combining and dividing rooms you can use a custom cable connecting the 
     // GPIO pins 2-4 between the primary codec and secondary codecs. This cable cannot be used if you have 
@@ -202,7 +209,7 @@ const profile_LAY1 = {
     */
 
     config: {
-        monitorMics: [], // (ex: [1, 2, 3, 4, 5, 6, 7, 8] ) analog input connectors (1-8) associated to microphones monitored
+        monitorMics: [1, 2, 4, 8], // (ex: [1, 2, 3, 4, 5, 6, 7, 8] ) analog input connectors (1-8) associated to microphones monitored
         ethernetMics: [], // (ex: 11, 12, 13, 14] ) IDs associated to Ethernet mics, up to 8 mics with 8 sub-ids: e.j. 12 is Ethernet Mic 1, sub-ID 2. 
         usbMics: [], // (ex: [101]) Mic input connectors associated to the USB microphones being used in the main codec: 101 is USB Mic 1
         externalMics: [], //  (ex: [901, 902]) input ids associated to microphones connected to an external controller received as message format MIC_ACTIVE_XX where XX is an external mic id 01-99
@@ -210,7 +217,7 @@ const profile_LAY1 = {
             {   // example for quadcam directly connected to connector 1 in main room 
                 name: 'RoomMain',     // Name for your composition. If source is JS_SECONDARY and ROOM_ROLE is JS_PRIMARY, name will be used in toggle UI
                 codecIP: '',        // No CodecIP needed if source is JS_LOCAL
-                mics: [1],    // Mics you want to associate with this composition. Example: [1, 2, 3]
+                mics: [5],    // Mics you want to associate with this composition. Example: [1, 2, 3]
                 connectors: [1],    // Video input connector Ids to use
                 source: JS_LOCAL,   // Always use JS_LOCAL in Primary or Secondary when referring to locally connected camera
                 layout: 'Prominent',// Layout to use
@@ -218,7 +225,7 @@ const profile_LAY1 = {
             },
             { // exmaple for video from Secondary codec 'RoomSecondaryRight'
                 name: 'RoomSecondaryRight', //Name for your composition. If source is JS_SECONDARY and ROOM_ROLE is JS_PRIMARY, name will be used in toggle UI
-                codecIP: '10.0.0.112', // IP address of the secondary codec
+                codecIP: '10.0.0.112', // IP address or Webex ID (if BOT_TOKEN is set) of the secondary codec. To obtain codec ID: xStatus Webex DeveloperId
                 mics: [8], // in this example, audio tieline coming from secondary codec RoomSecondaryRight is connected into analog/mic connector 8
                 connectors: [2], // in this example, video tie line from secondary codec RoomSecondaryRight is connected to input connector 2
                 source: JS_SECONDARY, // all compositions related to secondary codecs must speecify source: JS_SECONDARY
@@ -227,7 +234,7 @@ const profile_LAY1 = {
             },
             { // exmaple for video from Secondary codec 'RoomSecondaryLeft', remove is only using one secondary
                 name: 'RoomSecondaryLeft', // Name for your composition. If source is JS_SECONDARY and ROOM_ROLE is JS_PRIMARY, name will be used in toggle UI
-                codecIP: '10.0.0.110', // IP address of the secondary code
+                codecIP: '10.0.0.110', // IP address or Webex ID (if BOT_TOKEN is set) of the secondary codec. To obtain codec ID: xStatus Webex DeveloperId
                 mics: [7],// in this example, audio tieline coming from secondary codec RoomSecondaryLeft is connected into analog/mic connector 7
                 connectors: [3], // in this example, video tie line from secondary codec RoomSecondaryLeft is connected to input connector 3
                 source: JS_SECONDARY, // all compositions related to secondary codecs must speecify source: JS_SECONDARY
@@ -236,7 +243,7 @@ const profile_LAY1 = {
             },
             { // example for auxiliary codec in primary room controlling another quadcam in the room 
                 name: 'SecondQuadCam', // Name for your composition. 
-                codecIP: '10.0.0.120', // IP address of auxiliary codec
+                codecIP: '10.0.0.120', // IP address or Webex ID (if BOT_TOKEN is set) of auxiliary codec. To obtain codec ID: xStatus Webex DeveloperId
                 mics: [5], // typically directly connected microphones (not from tie lines) when using auxiliary codecs. Here it specifies analog mic 5
                 connectors: [4], // in this example, the auxiliary codecs monitor output is connected to input 4 on the primary codec. 
                 source: JS_AUXILIARY, // all compositions related to auxiliary codecs in same room must speecify source: JS_AUXILIARY
@@ -244,24 +251,41 @@ const profile_LAY1 = {
                 preset: 0 // use a camera preset instead of a layout with specific connectors.
             },
             {
+                // NOTE: If you want to always show and overview shot irrespective of microphone input, just
+                // set SIDE_BY_SIDE_TIME in section 5 below to 0 
+                // Also, if you wish to show several presets in a composition or a combination of presets and 
+                // non-preset camera or tie line video inputs, specify the presets to use in the preset key below
+                // as an array (i.e. [11,12]) but also include the video connector ID for the cameras for those 
+                // presets in the connectors array below in the right order so the macro knows how to lay them out in the composition
+                // (i.e. connectors:[2,3,1,4] if the connectorID for the camera associated for preset 11 is 2, 
+                // the connectorID for the camera associated for preset 12 is 3 and you want to also include input from quadcam
+                // at connector 1 and video from tieline from secondary in connector 4 as the overview shot.)
                 name: 'Overview',   // IMPORTANT: There needs to be an overview compositino with mics: [0]
                 codecIP: '',        // No CodecIP needed if source is JS_LOCAL
                 mics: [0],  // always just [0] for overview compositions
-                connectors: [1], // Specify here the video inputs and order to use to compose the "overview" shot. Ex: [2,1]
+                connectors: [1], // Specify here the video inputs and order to use to compose the "overview" shot. Ex: [2,1] including those for preset related cameras
                 source: JS_LOCAL,   // Overview composition always has source JS_LOCAL
                 layout: 'Equal',       // Layout to use
-                preset: 0 // use a camera preset instead of a layout with specific connectors.
+                preset: 0 // use a camera preset instead of a layout with specific connectors. Specify a single preset or an array of preset Ids
+                // NOTE: do not set preset to just one integer if you want more than one video input to be layed out, if you only
+                // have one preset but still want to specify other connectos in the layout then specify and array of just one preset
+                // (i.e. preset: [11] if only preset 11 will be used and connectors:[2,1,4] if you want to compose it input from the
+                // camera doing the preset with connectors 1 and 4 as well.)
+                // Setting preset to just one integeter will force it to ignore the connectors value
+                // Set preset to 0 if no presets will be used. 
             }
         ]
     },
 
 
     // If you are using a SpeakerTrack 60, set QUAD_CAM_ID to the connector ID where the first camera of the array is connected 
-    // and also use that ID in the connetors array in the compositions above   
+    // and also use that ID in the connetors array in the compositions above 
+    // If you are using a QuadCam, set this value to the connector ID being used for it.
+    // If you do not have any speakertracking capable cameras, just set this value to 0  
     QUAD_CAM_ID: 1,
 
 
-    OVERVIEW_SINGLE_SOURCE_ID: 1,
+    OVERVIEW_SINGLE_SOURCE_ID: 1, // No longer necessary, will be removed in future version
 
     // In RoomOS 11 there are multiple SpeakerTrack default behaviors to choose from on the navigator or
     // Touch10 device. Set ST_DEFAULT_BEHAVIOR to the one you want this macro to use from these choices:
@@ -282,7 +306,8 @@ const profile_LAY1 = {
     */
 
 
-    // Time to wait for silence before setting Speakertrack Side-by-Side mode
+    // Time to wait for silence before setting Speakertrack Side-by-Side (Overview) mode
+    // set SIDE_BY_SIDE_TIME to 0 if you always want to show that mode
     SIDE_BY_SIDE_TIME: 10000, // 10 seconds
     // Time to wait before switching to a new speaker
     NEW_SPEAKER_TIME: 2000, // 2 seconds
@@ -305,9 +330,10 @@ const profile_LAY1 = {
     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     + SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 +
     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    
+
     Presenter Track Q&A Mode
     */
+
     // ALLOW_PRESENTER_QA_MODE controls if the custom panel for activating PresenterTrack with or without 
     // Q&A Mode is shown in the Touch10 or Navigator. Without it, you cannot activate PresenterTrack Q&A mode
     ALLOW_PRESENTER_QA_MODE: true,

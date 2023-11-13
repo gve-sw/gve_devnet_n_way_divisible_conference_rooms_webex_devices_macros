@@ -13,9 +13,9 @@ or implied.
 *
 * Repository: gve_devnet_webex_devices_executive_room_multi_aux_switching_macro
 * Macro file: aux_codec (specific for divisible room macro)
-* Version: 2.1.15
-* Released: October 11, 2023
-* Latest RoomOS version tested: 11.8.1.7
+* Version: 2.2.1
+* Released: November 13, 2023
+* Latest RoomOS version tested: 11.9.1.13
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -47,7 +47,7 @@ import { GMM } from './GMM_Lib'
 // INSTALLER SETTINGS
 /////////////////////////////////////////////////////////////////////////////////////////
 
-// IP Address of MAIN codec (i.e. CodecPro)
+// IP Address or webex ID (if BOT_TOKEN is set) of MAIN codec (i.e. CodecPro). To obtain codec ID: xStatus Webex DeveloperId
 const MAIN_CODEC_IP = '10.10.10.11';
 
 // MAIN_CODEC_USERNAME and MAIN_CODEC_PASSWORD are the username and password of a user with integrator or admin roles on the Main Codec
@@ -57,6 +57,11 @@ const MAIN_CODEC_IP = '10.10.10.11';
 // separated by a colon (i.e. "username:password") before Base64 encoding with a tool such as https://www.base64encode.org/
 const MAIN_CODEC_USERNAME = 'username';
 const MAIN_CODEC_PASSWORD = 'password';
+
+// You can fill out the BOT_TOKEN value intead of OTHER_CODEC_USERNAME/OTHER_CODEC_PASSWORD to use the Webex cloud to
+// communicate with other codecs in the system. it should contain the Bot access token you wish to use to have the codec use
+// when sending commands to the other codecs by using Webex messaging. 
+const BOT_TOKEN = '';
 
 // Set USE_ST_BG_MODE to true if you want keep Quacams Speaker Tracking even while not being used
 const USE_ST_BG_MODE = true;
@@ -155,7 +160,11 @@ async function init() {
   // make sure Preset 30 exists, if not create it with just an overview shot of camera ID 1 which should be the QuadCam
   checkOverviewPreset();
   try {
-    mainCodec = new GMM.Connect.IP(MAIN_CODEC_USERNAME, MAIN_CODEC_PASSWORD, MAIN_CODEC_IP)
+    //mainCodec = new GMM.Connect.IP(MAIN_CODEC_USERNAME, MAIN_CODEC_PASSWORD, MAIN_CODEC_IP)
+    if (BOT_TOKEN == '')
+      mainCodec = new GMM.Connect.IP(MAIN_CODEC_USERNAME, MAIN_CODEC_PASSWORD, MAIN_CODEC_IP);
+    else
+      mainCodec = new GMM.Connect.Webex(BOT_TOKEN, MAIN_CODEC_IP);
   } catch (e) {
     console.error(e)
   }
@@ -212,10 +221,16 @@ GMM.Event.Receiver.on(event => {
 
 async function sendIntercodecMessage(message) {
   console.log(`sendIntercodecMessage: codec = ${MAIN_CODEC_IP} | message = ${message}`);
-  if (mainCodec != '') mainCodec.status(message).passIP().queue().catch(e => {
-    console.log('Error sending message');
-    alertFailedIntercodecComm("Error connecting to codec for first camera, please contact the Administrator");
-  });
+  if (BOT_TOKEN == '')
+    if (mainCodec != '') mainCodec.status(message).passIP().queue().catch(e => {
+      console.log('Error sending message');
+      alertFailedIntercodecComm("Error connecting to codec for first camera, please contact the Administrator");
+    });
+    else mainCodec.status(message).passDeviceId().queue().catch(e => {
+      console.log('Error sending message');
+      alertFailedIntercodecComm("Error connecting to codec for first camera, please contact the Administrator");
+    });
+
 }
 
 

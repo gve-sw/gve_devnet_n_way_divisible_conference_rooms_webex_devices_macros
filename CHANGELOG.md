@@ -95,3 +95,9 @@
 - Split out configuration sections of the macro in the divisible_room.js file to a separate divisible_config.js file for simpler updating of macro code and to support multiple advanced layouts.
 - Added support for multiple advanced layouts including the ability to give dual roles to some of the codecs so they act as a Primary or Secondary accourding to the selected layout.
 - Added support for up to three wall sensors connected via GPIO PINS 1-3 when using advanced layouts.
+
+11/13/23 Chaves (version 2.2.1)
+
+- Support for bot token and device ID for intercodec communication as alternative to username/password (pending GMM_Lib changes)
+- Support for preset and list of presets in overview compositions
+- Support for "always on" overview by allowing SIDE_BY_SIDE_TIME global to be set to 0.
