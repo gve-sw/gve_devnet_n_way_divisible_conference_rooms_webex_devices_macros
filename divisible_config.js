@@ -48,6 +48,9 @@ const profile_LAY1 = {
     // You can fill out the BOT_TOKEN value intead of OTHER_CODEC_USERNAME/OTHER_CODEC_PASSWORD to use the Webex cloud to
     // communicate with other codecs in the system. it should contain the Bot access token you wish to use to have the codec use
     // when sending commands to the other codecs by using Webex messaging. 
+    // NOTE: You must add the Bot that corresponds to the bot token you intend to use to the API access list in the Workspace where the device is configured
+    // To do so in Control Hub, go to the Workspace for each device, click on the "Edit API Access" button and add the bot to the list (search for it by name)
+    // with "Full Access" access level. 
     BOT_TOKEN: '',
 
 

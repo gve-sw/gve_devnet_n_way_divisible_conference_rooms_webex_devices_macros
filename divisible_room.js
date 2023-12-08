@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.1
-* Released: November 13, 2023
-* Latest RoomOS version tested: 11.9.1.13 
+* Version: 2.2.2
+* Released: December 7, 2023
+* Latest RoomOS version tested: 11.10.1.8 
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -2150,7 +2150,7 @@ GMM.Event.Receiver.on(async event => {
     }
     else { // This section is for handling messages sent from primary to secondary codec and vice versa
       // and for messages from Aux to either Primary or Secondary in same room
-      let theSourceIdentifier = (CONF.BOT_TOKEN == '') ? event.Source?.IPv4 : event.Source?.deviceID; //TODO: verify this is how to extract deviceId
+      let theSourceIdentifier = (CONF.BOT_TOKEN == '') ? event.Source?.IPv4 : event.Source?.DeviceId;
       switch (event.App) { //Based on the App (Macro Name), I'll run some code
         case 'aux_codec':
           console.warn("Received from aux codec: ", event.Value)

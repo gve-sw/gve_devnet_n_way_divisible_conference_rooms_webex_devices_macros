@@ -592,7 +592,7 @@ export const GMM = {
         }
         if (typeof this.passId != 'undefined') {
           var temp = await discoverDeviceId(this.Params.Header, this.Payload.Source.Id)
-          this.Payload.Source['DeviceID'] = temp.items == '' ? 'Not Found' : temp.items[0].id
+          this.Payload.Source['DeviceId'] = temp.items == '' ? 'Not Found' : temp.items[0].id
         }
         if (JSON.stringify(this.Payload).length > GMM.DevAssets.maxPayloadSize) {
           throw ({ '⚠ GMM Error ⚠': `GMM Connect IP paylod exceed maximum character limit`, MaxLimit: GMM.DevAssets.maxPayloadSize, Payload: { Size: JSON.stringify(this.Payload).length, Content: JSON.stringify(this.Payload) } })
