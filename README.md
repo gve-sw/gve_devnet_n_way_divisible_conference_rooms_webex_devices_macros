@@ -36,7 +36,7 @@ Install GMM_Lib.js and divisible_room.js on each codec (primary and secondary)
 
 If you wish to use the USB Mode v3 macro for USB passthru , install the USB_Mode_Version_3.js macro onto the codec(s) you wish to use it with.
 
-NOTE: If you need to replace a codec that was alreay configured with this macro and wich to preserve the Camera presets, consider using this macro to make a backup of the presets for later restoring:
+NOTE: If you need to replace a codec that was already configured with this macro and wish to preserve the Camera presets, consider using this macro to make a backup of the presets for later restoring:
 https://github.com/wxsd-sales/camera-presets-backup-restore-macros
 
 Here is a summary of each macro in this repository:
