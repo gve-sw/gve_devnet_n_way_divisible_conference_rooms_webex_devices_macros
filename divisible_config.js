@@ -339,7 +339,7 @@ const profile_LAY1 = {
 
     // ALLOW_PRESENTER_QA_MODE controls if the custom panel for activating PresenterTrack with or without 
     // Q&A Mode is shown in the Touch10 or Navigator. Without it, you cannot activate PresenterTrack Q&A mode
-    ALLOW_PRESENTER_QA_MODE: true,
+    ALLOW_PRESENTER_QA_MODE: false,
 
     //PRESENTER_QA_AUDIENCE_MIC_IDS is an array for Mic IDs that are being used for the audience. 
     PRESENTER_QA_AUDIENCE_MIC_IDS: [1, 2],

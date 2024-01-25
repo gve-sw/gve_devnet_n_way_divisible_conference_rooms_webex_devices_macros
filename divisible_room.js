@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.2
-* Released: December 7, 2023
-* Latest RoomOS version tested: 11.10.1.8 
+* Version: 2.2.3
+* Released: January 24, 2024
+* Latest RoomOS version tested: 11.12.1.6 
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -125,6 +125,7 @@ function priKeepAliveStatuses() {
     console.log(`Received KeepAlive responses from all secondaries after ${KA_CHECK_REPLIES_TIMEOUT_MS} milliseconds. `)
 
 }
+
 
 async function priSendKeepAlive() {
   //send message "VTC_KA_req" to all secondaries
@@ -433,8 +434,7 @@ async function init_intercodec() {
       let stored_setStatus = {}
       stored_setStatus = await GMM.read.global('JoinSplit_secondariesStatus').catch(async e => {
         console.log("No initial JoinSplit_secondariesStatus global detected, using constants in macro to create new one")
-        //return false; // TODO: this should return {}
-        return {}; // TODO: test this return method instead of return false
+        return {};
       })
       let codecIPArray = [];
 
@@ -1592,7 +1592,7 @@ function processExternalMicHandler(activeMic) {
   // input so we can indicate it is an external mic specified in the CONF.config.externaMics array 
   let input = parseInt('9' + activeMic)
   let average = 0;
-  if (allowCameraSwitching) {
+  if (allowCameraSwitching && !manual_mode) {
     // simulate valide average to trigger switch since controller already made decision
     if (input > 900) {
       average = CONF.MICROPHONEHIGH + 1;
@@ -1729,6 +1729,8 @@ async function makeCameraSwitch(input, average) {
 
     // send required messages to auxiliary codec that also turns on speakertrack over there
     if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
+    await sendIntercodecMessageAux('automatic_mode');
+
     lastActiveHighInput = input;
     restartNewSpeakerTimer();
     if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
@@ -1769,6 +1771,8 @@ async function presenterQASwitch(input, sourceDict) {
 
   // send required messages to secondary codec that also turns on speakertrack over there
   if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY && roomCombined) await sendIntercodecMessage('automatic_mode');
+  await sendIntercodecMessageAux('automatic_mode');
+
 
   lastActiveHighInput = input;
   restartNewSpeakerTimer();
@@ -1938,6 +1942,9 @@ async function recallSideBySideMode() {
         await sendIntercodecMessage('side_by_side');
       }
 
+      await sendIntercodecMessageAux('side_by_side');
+
+
       lastActiveHighInput = 0;
       lowWasRecalled = true;
     }
@@ -1967,7 +1974,7 @@ async function recallQuadCam() {
   pauseSpeakerTrack();
   if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
   //let currentSTCameraID = CONF.QUAD_CAM_ID; 
-  let currentSTCameraID = await xapi.Status.Cameras.SpeakerTrack.ActiveConnector.get(); //TODO: Test if it obtains the correct camera ID
+  let currentSTCameraID = await xapi.Status.Cameras.SpeakerTrack.ActiveConnector.get();
   console.log('In recallQuadCam Obtained currentSTCameraID as: ', currentSTCameraID)
   let connectorDict = { SourceId: currentSTCameraID }; xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict = connectorDict;
@@ -2742,7 +2749,7 @@ function evalSpeakerTrack(value) {
   else {
     //if (macroTurnedOffST) {macroTurnedOffST=false;}
     //else {stopAutomation();}
-    if (!manual_mode /*&& !inSideBySide*/) stopAutomation();
+    if (!manual_mode && !presenterTracking /*&& !inSideBySide*/) stopAutomation();
   }
 
 }
@@ -2987,6 +2994,7 @@ async function init_switching() {
         // no need to force a camera switch unless we are indeed switching since ,
         // there is a SIDE_BY_SIDE_TIME value set more than 0
         lastSourceDict = { SourceID: '0' }; // forcing a camera switch
+        lastActiveHighInput = 0;
       }
 
     }
@@ -3001,7 +3009,7 @@ async function init_switching() {
       presenterTracking = true;
       if (CONF.SIDE_BY_SIDE_TIME > 0) {
         // only stop initial call timer if we are not forcing overview all the time,
-        stopInitialCallTimer(); //TODO: originally called onInitialCallTimerExpired but that was not working with PT QA mode
+        stopInitialCallTimer();
         if (PRESENTER_QA_MODE && !webrtc_mode) {
           //showPTPanelButton();
           //recallFullPresenter();
@@ -3283,7 +3291,7 @@ async function handleWidgetActions(event) {
       Object.entries(secondariesStatus).forEach(([key, val]) => {
         if (val['selected']) at_least_one_selected = true;
       })
-      if (!at_least_one_selected) { //TODO: Test this
+      if (!at_least_one_selected) {
         xapi.command('UserInterface Message Alert Display', {
           Title: 'Cannot Combine/Split',
           Text: 'You do not have any secondary codecs selected, select at least one and try again.',
@@ -3381,7 +3389,8 @@ async function handleWidgetActions(event) {
               console.log("Turning on PresenterTrack only...");
               if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
               if (CONF.SIDE_BY_SIDE_TIME > 0) {
-                deactivateSpeakerTrack();
+                //deactivateSpeakerTrack(); 
+                activateSpeakerTrack(); //TODO: test if not activating speakertrack here when you have an SP60 allows it to work in QA mode
                 presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
                 connectorDict = { ConnectorId: presenterSource };
                 xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
@@ -3389,6 +3398,8 @@ async function handleWidgetActions(event) {
               }
               if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
               xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });
+              pauseSpeakerTrack();
+
               PRESENTER_QA_MODE = false;
               break;
 

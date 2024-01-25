@@ -105,3 +105,9 @@
 12/7/23 Changes (version 2.2.2)
 
 - Fixed support for bot token in GMM_Lib and divisible_room and added instructions on needing to add Bot to be used to the API Access list of the Workspace where the device resides in Control Hub
+
+1/24/24 Changes (version 2.2.3)
+
+- Added sending messages to Aux codecs on Primary and Secondary rooms to go automatic or side by side mode since those had been omitted
+- Added code to ignore external mic events when in manual mode since they were triggering camera changes when not wanted
+- Corrected problems with custom panel PresenterTrack mode (without QA) since speakercamera backgrouding was incorrectly being handled.
