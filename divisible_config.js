@@ -59,7 +59,8 @@ const profile_LAY1 = {
     /*
     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     + SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 
-    + Only for use on PRIMARY Codec (i.e set ROOM_ROLE : JS_PRIMARY above, then fill this section
+    + Mostly for use on PRIMARY Codec (i.e set ROOM_ROLE : JS_PRIMARY above)
+    + but USE_GPIO_INTERCODEC should be correctly set on both.
     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     */
 

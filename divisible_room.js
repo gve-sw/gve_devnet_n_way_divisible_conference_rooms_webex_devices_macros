@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.3
-* Released: January 24, 2024
+* Version: 2.2.4
+* Released: January 26, 2024
 * Latest RoomOS version tested: 11.12.1.6 
 *
 * Macro Author:      	Gerardo Chaves
@@ -2449,14 +2449,6 @@ async function sendSelectionMessage(secIP, message) {
   }
 }
 
-GMM.Event.Queue.on(report => {
-  //The queue will continuously log a report to the console, even when it's empty.
-  //To avoid additional messages, we can filter the Queues Remaining Requests and avoid it if it's equal to Empty
-  if (report.QueueStatus.RemainingRequests != 'Empty') {
-    report.Response.Headers = [] // Clearing Header response for the simplicity of the demo, you may need this info
-    //console.log(report)
-  }
-});
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // OTHER FUNCTIONAL HANDLERS
@@ -4129,10 +4121,34 @@ async function monitorOnAutoError(message) {
 }
 
 
+GMM.Event.Queue.on(report => {
+  //The queue will continuously log a report to the console, even when it's empty.
+  //To avoid additional messages, we can filter the Queues Remaining Requests and avoid it if it's equal to Empty
+  if (report.QueueStatus.RemainingRequests != 'Empty') {
+    report.Response.Headers = [] // Clearing Header response for the simplicity of the demo, you may need this info
+    console.log(report)
+  }
+});
+
 
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // INVOCATION OF INIT() TO START THE MACRO
 /////////////////////////////////////////////////////////////////////////////////////////
 
-init();
+
+async function delayedStartup(time = 120) {
+  while (true) {
+    const upTime = await xapi.Status.SystemUnit.Uptime.get()
+
+    if (upTime > time) {
+      await init();
+      break;
+    } else {
+      delay(5000);
+    }
+  }
+}
+
+delayedStartup();
+

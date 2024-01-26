@@ -110,4 +110,8 @@
 
 - Added sending messages to Aux codecs on Primary and Secondary rooms to go automatic or side by side mode since those had been omitted
 - Added code to ignore external mic events when in manual mode since they were triggering camera changes when not wanted
-- Corrected problems with custom panel PresenterTrack mode (without QA) since speakercamera backgrouding was incorrectly being handled.
+- Corrected problems with custom panel PresenterTrack mode (without QA) since speakercamera backgrounding was incorrectly being handled.
+
+1/26/24 Changes (version 2.2.4)
+
+- Added delay in startup code to deal with timing changes in RoomOS 11.12 that were causing GMM_Lib to error out when started right after system restart. This was causing the macro to not be able to send messages to other codecs so you could not split/combine right after reboot without re-starting the macro.
