@@ -4126,7 +4126,7 @@ GMM.Event.Queue.on(report => {
   //To avoid additional messages, we can filter the Queues Remaining Requests and avoid it if it's equal to Empty
   if (report.QueueStatus.RemainingRequests != 'Empty') {
     report.Response.Headers = [] // Clearing Header response for the simplicity of the demo, you may need this info
-    console.log(report)
+    //console.log(report)
   }
 });
 

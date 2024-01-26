@@ -234,15 +234,6 @@ async function sendIntercodecMessage(message) {
 }
 
 
-GMM.Event.Queue.on(report => {
-  //The queue will continuously log a report to the console, even when it's empty.
-  //To avoid additional messages, we can filter the Queues Remaining Requests and avoid it if it's equal to Empty
-  if (report.QueueStatus.RemainingRequests != 'Empty') {
-    report.Response.Headers = [] // Clearing Header response for the simplicity of the demo, you may need this info
-    //console.log(report)
-  }
-});
-
 // ---------------------- MACROS
 
 
@@ -326,4 +317,26 @@ xapi.Status.Cameras.SpeakerTrack.Availability
     }
   });
 
-init();
+GMM.Event.Queue.on(report => {
+  //The queue will continuously log a report to the console, even when it's empty.
+  //To avoid additional messages, we can filter the Queues Remaining Requests and avoid it if it's equal to Empty
+  if (report.QueueStatus.RemainingRequests != 'Empty') {
+    report.Response.Headers = [] // Clearing Header response for the simplicity of the demo, you may need this info
+    //console.log(report)
+  }
+});
+
+async function delayedStartup(time = 120) {
+  while (true) {
+    const upTime = await xapi.Status.SystemUnit.Uptime.get()
+
+    if (upTime > time) {
+      await init();
+      break;
+    } else {
+      delay(5000);
+    }
+  }
+}
+
+delayedStartup();
