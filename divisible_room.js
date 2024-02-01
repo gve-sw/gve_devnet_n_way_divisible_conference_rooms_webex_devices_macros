@@ -14,8 +14,8 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.4
-* Released: January 26, 2024
+* Version: 2.2.5
+* Released: February 1, 2024
 * Latest RoomOS version tested: 11.12.1.6 
 *
 * Macro Author:      	Gerardo Chaves
@@ -2349,19 +2349,19 @@ GMM.Event.Receiver.on(async event => {
                 processSecUnselectedAck(theSourceIdentifier);
                 break;
               case 'MUTE':
-                xapi.command('Audio Microphones Mute');
+                if (roomCombined) xapi.command('Audio Microphones Mute');
                 break;
               case 'UNMUTE':
-                xapi.command('Audio Microphones Unmute');
+                if (roomCombined) xapi.command('Audio Microphones Unmute');
                 break;
               case 'STANDBY_ON':
-                xapi.command('Standby Activate');
+                if (roomCombined) xapi.command('Standby Activate');
                 break;
               case 'STANDBY_OFF':
-                xapi.command('Standby Deactivate');
+                if (roomCombined) xapi.command('Standby Deactivate');
                 break;
               case 'STANDBY_HALFWAKE':
-                xapi.command('Standby Halfwake');
+                if (roomCombined) xapi.command('Standby Halfwake');
                 break;
 
               default:
@@ -3676,11 +3676,13 @@ function secondaryStandbyControl() {
   xapi.status.on('GPIO Pin 3', (state) => {
     console.log(`GPIO Pin 3[${state.id}] State went to: ${state.State}`);
     if (state.State === 'Low') {
-      xapi.command('Standby Activate');
+      if (roomCombined) xapi.command('Standby Activate');
     }
     else if (state.State === 'High') {
-      xapi.command('Standby Deactivate');
-      stopAutomation();
+      if (roomCombined) {
+        xapi.command('Standby Deactivate');
+        stopAutomation();
+      }
     }
   });
 }
@@ -3689,10 +3691,10 @@ function secondaryMuteControl() {
   xapi.status.on('GPIO Pin 2', (state) => {
     console.log(`GPIO Pin 2[${state.id}] State went to: ${state.State}`);
     if (state.State === 'Low') {
-      xapi.command('Audio Microphones Mute')
+      if (roomCombined) xapi.command('Audio Microphones Mute')
     }
     else if (state.State === 'High') {
-      xapi.command('Audio Microphones Unmute ')
+      if (roomCombined) xapi.command('Audio Microphones Unmute ')
     }
   });
 }

@@ -115,3 +115,7 @@
 1/26/24 Changes (version 2.2.4)
 
 - Added delay in startup code to deal with timing changes in RoomOS 11.12 that were causing GMM_Lib to error out when started right after system restart. This was causing the macro to not be able to send messages to other codecs so you could not split/combine right after reboot without re-starting the macro.
+
+2/1/24 Changes (version 2.2.5)
+
+- Added validation that a secondary is combined before obeying MUTE and standby commands from primary. When a non-selected secondary was in a call at the same time as a primary combined with some other secondaries, then when pressing mute on the primary it was muting the non-selected secondary.
