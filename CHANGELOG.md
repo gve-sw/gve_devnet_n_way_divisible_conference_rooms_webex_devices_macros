@@ -119,3 +119,7 @@
 2/1/24 Changes (version 2.2.5)
 
 - Added validation that a secondary is combined before obeying MUTE and standby commands from primary. When a non-selected secondary was in a call at the same time as a primary combined with some other secondaries, then when pressing mute on the primary it was muting the non-selected secondary.
+
+5/7/24 Changes (version 2.2.6)
+
+- Added code to force primary to come out of standby when detecting voltage changes on GPIO Pin 1 (wall sensor) for proper combine/split. This in turn messages secondary codec to also come out of standby.

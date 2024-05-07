@@ -236,7 +236,7 @@ const profile_LAY1 = {
                 layout: 'Prominent',       // Layout to use
                 preset: 0              // use a camera preset instead of a layout with specific connectors.
             },
-            { // exmaple for video from Secondary codec 'RoomSecondaryLeft', remove is only using one secondary
+            { // example for video from Secondary codec 'RoomSecondaryLeft', remove is only using one secondary
                 name: 'RoomSecondaryLeft', // Name for your composition. If source is JS_SECONDARY and ROOM_ROLE is JS_PRIMARY, name will be used in toggle UI
                 codecIP: '10.0.0.110', // IP address or Webex ID (if BOT_TOKEN is set) of the secondary codec. To obtain codec ID: xStatus Webex DeveloperId
                 mics: [7],// in this example, audio tieline coming from secondary codec RoomSecondaryLeft is connected into analog/mic connector 7
@@ -267,7 +267,7 @@ const profile_LAY1 = {
                 name: 'Overview',   // IMPORTANT: There needs to be an overview compositino with mics: [0]
                 codecIP: '',        // No CodecIP needed if source is JS_LOCAL
                 mics: [0],  // always just [0] for overview compositions
-                connectors: [1], // Specify here the video inputs and order to use to compose the "overview" shot. Ex: [2,1] including those for preset related cameras
+                connectors: [1, 2], // Specify here the video inputs and order to use to compose the "overview" shot. Ex: [2,1] including those for preset related cameras
                 source: JS_LOCAL,   // Overview composition always has source JS_LOCAL
                 layout: 'Equal',       // Layout to use
                 preset: 0 // use a camera preset instead of a layout with specific connectors. Specify a single preset or an array of preset Ids

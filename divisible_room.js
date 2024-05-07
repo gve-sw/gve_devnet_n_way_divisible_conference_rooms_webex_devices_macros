@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.5
-* Released: February 1, 2024
-* Latest RoomOS version tested: 11.12.1.6 
+* Version: 2.2.6
+* Released: May 7, 2024
+* Latest RoomOS version tested: 11.15.1.6 
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -852,7 +852,7 @@ function alertSelectWhenCombinedScreen() {
   * This will check Pin 1 and listen when the state of the pin changes
 **/
 function primaryInitPartitionSensor() {
-  xapi.status.on('GPIO Pin 1', (state) => {
+  xapi.status.on('GPIO Pin 1', async (state) => {
     console.log(`GPIO Pin 1[${state.id}] State went to: ${state.State}`);
     if (wallSensorOverride) {
       console.log('wallSensorOverride is set to true; ignoring Pin1 state......')
@@ -871,6 +871,9 @@ function primaryInitPartitionSensor() {
       });
     }
     else {
+      //TODO: fully test forcing codec out of stanby when detecting voltage changes on GPIO Pin 1 (wall sensor)
+      xapi.Command.Standby.Deactivate(); // take out of standby to have primary send message to secondary to also come out of standby to correctly join or split
+      await delay(2000); // give some time to get out of standby
       if (state.State === CONF.WALL_SENSOR_COMBINED_STATE) {
         alertJoinedScreen();
         console.log('Primary Switched to Combined Mode [Partition Sensor]');
