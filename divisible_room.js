@@ -3415,6 +3415,7 @@ async function handleWidgetActions(event) {
               if (webrtc_mode && !isOSEleven) setTimeout(function () { xapi.Command.Video.Input.MainVideo.Unmute() }, CONF.WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
               PRESENTER_QA_MODE = true;
+              allowCameraSwitching = true; // this is to allow camera switching in QA mode if initialCallTimer had not expired.
               //resumeSpeakerTrack();
               break;
 

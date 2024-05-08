@@ -123,3 +123,4 @@
 5/7/24 Changes (version 2.2.6)
 
 - Added code to force primary to come out of standby when detecting voltage changes on GPIO Pin 1 (wall sensor) for proper combine/split. This in turn messages secondary codec to also come out of standby.
+- Corrected problem where PresenterTrack QA mode was not working if invoked before InitialCallTimer expired.
