@@ -2,6 +2,8 @@
 
 Macros to automate dividing and combining conference rooms with Webex Codec Pro and Webex Codec EQ devices so that the same equipment can be used in both modes to join conference calls. This Macro can be used for setups consisting of two rooms that can be combined into one large room, but also for more complex designs where there are up to four rooms that need to be combined or devided as long as they are contiguous and on of the rooms is designated the primary which always has to be part of any combination.
 
+NOTE: This is a more complex variant of the [Divisible Conference Rooms Webex Devices Macros](https://github.com/gve-sw/gve_devnet_divisible_conference_rooms_webex_devices_macros) for complex room layouts where Secondary codecs can be "promoted" to Primary and where you can have more than 1 QuadCam in each room. If you only have 2 rooms that need to be combined and each room only has a QuadCam and a Presenter camera you can greatly reduce complexity by using the simpler [Divisible Conference Rooms Webex Devices Macros](https://github.com/gve-sw/gve_devnet_divisible_conference_rooms_webex_devices_macros)
+
 | RoomOs Minimum Version | Webex Cloud | Webex Edge (Hybrid Cloud) | On-Premise | Microsoft Teams Room On Cisco Devices |
 | ---------------------- | ----------- | ------------------------- | ---------- | ------------------------------------- |
 | 10.17.1.0              | Yes         | Yes                       | Yes        | No - API Limitation                   |
