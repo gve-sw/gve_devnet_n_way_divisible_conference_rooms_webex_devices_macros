@@ -124,3 +124,7 @@
 
 - Added code to force primary to come out of standby when detecting voltage changes on GPIO Pin 1 (wall sensor) for proper combine/split. This in turn messages secondary codec to also come out of standby.
 - Corrected problem where PresenterTrack QA mode was not working if invoked before InitialCallTimer expired.
+
+6/3/25 Changes (version 2.2.7)
+
+- Changed method of obtaining module name CommonJS to ECMAScript given the deprecation of CommonJS in RoomOS.

@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.6
-* Released: May 7, 2024
-* Latest RoomOS version tested: 11.15.1.6 
+* Version: 2.2.7
+* Released: June 3, 2025
+* Latest RoomOS version tested: 11.28.1.5 
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -171,8 +171,8 @@ async function validate_config() {
     await disableMacro(`config validation fail: Platform ${ProductPlatform} not supported.`);
   }
 
-  if (module.name.replace('./', '') != 'divisible_room')
-    await disableMacro(`config validation fail: macro name has changed to: ${module.name.replace('./', '')}. Please set back to: divisible_room`);
+  if (_main_macro_name() != 'divisible_room')
+    await disableMacro(`config validation fail: macro name has changed to: ${_main_macro_name()}. Please set back to: divisible_room`);
 
   if (CONF.OTHER_CODEC_USERNAME == '')
     await disableMacro(`config validation fail: OTHER_CODEC credentials must be set.  Current values: CONF.OTHER_CODEC_USERNAME: ${CONF.OTHER_CODEC_USERNAME} CONF.OTHER_CODEC_PASSWORD= ${CONF.OTHER_CODEC_PASSWORD}`);
@@ -310,11 +310,11 @@ function delay(ms) {
 
 async function disableMacro(reason = 'N/A') {
   console.warn(reason)
-  let act = `Disabling [${module.name.replace('./', '')}] in 10 seconds`
+  let act = `Disabling [${_main_macro_name()}] in 10 seconds`
   console.error({ Error: reason, Action: act })
   await xapi.Command.UserInterface.Message.Alert.Display({ Title: '⚠️ Macro Error ⚠️', Text: `${reason}<p>${act}`, Duration: 9 });
   await delay(10000);
-  await xapi.Command.Macros.Macro.Deactivate({ Name: module.name.replace('./', '') });
+  await xapi.Command.Macros.Macro.Deactivate({ Name: _main_macro_name() });
   await delay(100);
   await xapi.Command.Macros.Runtime.Restart();
 }
@@ -510,7 +510,7 @@ async function init_intercodec() {
   }
 }
 
-const localCallout = new GMM.Connect.Local(module.name.replace('./', ''))
+const localCallout = new GMM.Connect.Local(_main_macro_name())
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // VARIABLES
@@ -4115,7 +4115,7 @@ function removeWarning() {
 }
 
 async function monitorOnAutoError(message) {
-  let macro = module.name.split('./')[1]
+  let macro = _main_macro_name()
   await xapi.Command.UserInterface.Message.Alert.Display({
     Title: message.Error,
     Text: message.Message,
