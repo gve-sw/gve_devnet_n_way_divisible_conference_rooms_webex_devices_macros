@@ -128,3 +128,7 @@
 6/3/25 Changes (version 2.2.7)
 
 - Changed method of obtaining module name CommonJS to ECMAScript given the deprecation of CommonJS in RoomOS.
+
+6/6/25 Changes (version 2.2.8)
+
+- Changed syntax for xapi.Config.Audio.Input.USBInterface[1].EchoControl.Mode.get() call which is now case sensitive (worked with lower case c for "config" originally)
