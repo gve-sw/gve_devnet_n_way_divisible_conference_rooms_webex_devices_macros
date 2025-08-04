@@ -132,3 +132,7 @@
 6/6/25 Changes (version 2.2.8)
 
 - Changed syntax for xapi.Config.Audio.Input.USBInterface[1].EchoControl.Mode.get() call which is now case sensitive (worked with lower case c for "config" originally)
+
+8/4/25 Changes (version 2.2.7)
+
+- Fixes in the validation of Bot Tokens to be able to use Webex ID and Bot Token instead of IP address and username/password for inter-codec communication

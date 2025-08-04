@@ -14,7 +14,7 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.8
+* Version: 2.2.7
 * Released: June 6, 2025
 * Latest RoomOS version tested: 11.28.1.5 
 *
@@ -174,8 +174,8 @@ async function validate_config() {
   if (_main_macro_name() != 'divisible_room')
     await disableMacro(`config validation fail: macro name has changed to: ${_main_macro_name()}. Please set back to: divisible_room`);
 
-  if (CONF.OTHER_CODEC_USERNAME == '')
-    await disableMacro(`config validation fail: OTHER_CODEC credentials must be set.  Current values: CONF.OTHER_CODEC_USERNAME: ${CONF.OTHER_CODEC_USERNAME} CONF.OTHER_CODEC_PASSWORD= ${CONF.OTHER_CODEC_PASSWORD}`);
+  if (CONF.OTHER_CODEC_USERNAME == '' && CONF.BOT_TOKEN == '')
+    await disableMacro(`config validation fail: OTHER_CODECcredentials must be set.  Current values: CONF.OTHER_CODEC_USERNAME: ${CONF.OTHER_CODEC_USERNAME} CONF.OTHER_CODEC_PASSWORD= ${CONF.OTHER_CODEC_PASSWORD}`);
   // allow up to 8 analog mics
   let allowedMics = [1, 2, 3, 4, 5, 6, 7, 8];
 
