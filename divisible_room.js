@@ -14,9 +14,9 @@ or implied.
 *
 * Repository: gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros
 * Macro file: divisible_room
-* Version: 2.2.7
-* Released: June 6, 2025
-* Latest RoomOS version tested: 11.28.1.5 
+* Version: 2.2.8
+* Released: August 5, 2025
+* Latest RoomOS version tested: 11.31.1.3 
 *
 * Macro Author:      	Gerardo Chaves
 *                    	Technical Solutions Architect
@@ -429,7 +429,7 @@ var otherCodecs = {};
 
 //Run your init script asynchronously 
 async function init_intercodec() {
-  if (CONF.OTHER_CODEC_USERNAME != '')
+  if (CONF.OTHER_CODEC_USERNAME != '' || CONF.BOT_TOKEN != '')
     if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
       let stored_setStatus = {}
       stored_setStatus = await GMM.read.global('JoinSplit_secondariesStatus').catch(async e => {
@@ -2822,33 +2822,33 @@ async function init_switching() {
     }
   });
 
-
-  // register handler for Call Successful
-  xapi.Event.CallSuccessful.on(async () => {
-
-    console.log("Starting new call timer...");
-    //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
-    await startAutomation();
-    recallSideBySideMode();
-
-    // only initialize initial call timer if side by side timer (overview timer) is not zero
-    // because, if zero, that means we will always be showing side by side (overview) mode
-    if (CONF.SIDE_BY_SIDE_TIME > 0) startInitialCallTimer();
-
-    // always tell the other codec when your are in or out of a call
-    await sendIntercodecMessage('CALL_CONNECTED');
-    if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
-      // only need to keep track of codecs being in call with these
-      // booleans in primary codec which is the one that initiates join/split
-      primaryInCall = true;
-      evalCustomPanels();
-      handleExternalController('PRIMARY_CALLCONNECT');
-    } else {
-      handleExternalController('SECONDARY_CALLCONNECT');
-    }
-
-  });
-
+  /*
+    // register handler for Call Successful
+    xapi.Event.CallSuccessful.on(async () => {
+  
+      console.log("Starting new call timer...");
+      //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
+      await startAutomation();
+      recallSideBySideMode();
+  
+      // only initialize initial call timer if side by side timer (overview timer) is not zero
+      // because, if zero, that means we will always be showing side by side (overview) mode
+      if (CONF.SIDE_BY_SIDE_TIME > 0) startInitialCallTimer();
+  
+      // always tell the other codec when your are in or out of a call
+      await sendIntercodecMessage('CALL_CONNECTED');
+      if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+        // only need to keep track of codecs being in call with these
+        // booleans in primary codec which is the one that initiates join/split
+        primaryInCall = true;
+        evalCustomPanels();
+        handleExternalController('PRIMARY_CALLCONNECT');
+      } else {
+        handleExternalController('SECONDARY_CALLCONNECT');
+      }
+  
+    });
+  */
   // register handler for Call Disconnect
   xapi.Event.CallDisconnect.on(async () => {
     if (!usb_mode) {
@@ -2871,6 +2871,34 @@ async function init_switching() {
       handleExternalController('SECONDARY_CALLDISCONNECT');
     }
   });
+
+
+  // register alternative handler for Call events using xStatus.Call.Status
+  xapi.Status.Call.Status.on(async (value) => {
+    console.log(`xStatus RECEIVED: Call Status: ${value}`);
+    if (value == 'Connected') {
+      console.log("Starting new call timer...");
+      //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
+      await startAutomation();
+      recallSideBySideMode();
+
+      // only initialize initial call timer if side by side timer (overview timer) is not zero
+      // because, if zero, that means we will always be showing side by side (overview) mode
+      if (CONF.SIDE_BY_SIDE_TIME > 0) startInitialCallTimer();
+
+      // always tell the other codec when your are in or out of a call
+      await sendIntercodecMessage('CALL_CONNECTED');
+      if (CONF.JOIN_SPLIT_CONFIG.ROOM_ROLE == CONF.JS_PRIMARY) {
+        // only need to keep track of codecs being in call with these
+        // booleans in primary codec which is the one that initiates join/split
+        primaryInCall = true;
+        evalCustomPanels();
+        handleExternalController('PRIMARY_CALLCONNECT');
+      } else {
+        handleExternalController('SECONDARY_CALLCONNECT');
+      }
+    }
+  })
 
   xapi.Event.PresentationPreviewStarted
     .on(async value => {

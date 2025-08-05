@@ -136,3 +136,8 @@
 8/4/25 Changes (version 2.2.7)
 
 - Fixes in the validation of Bot Tokens to be able to use Webex ID and Bot Token instead of IP address and username/password for inter-codec communication
+
+8/5/25 Changes (version 2.2.8)
+
+- Fix in initialization of GMM Lib when using Bot Tokens to be able to use Webex ID and Bot Token instead of IP address and username/password for inter-codec communication
+- Changes in the way connected calls are detected to work around issues with "Remote Access" feature in Control Hub which triggers CallSuccessful Event which confused the macro.
